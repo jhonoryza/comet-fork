@@ -14,6 +14,9 @@ pub enum HarnessId {
     Hermes,
     /// The pi coding agent (pi.dev), driven over ACP via the `pi-acp` adapter.
     Pi,
+    /// OpenCode coding agent, driven over ACP (`opencode acp`).
+    #[serde(rename = "opencode")]
+    OpenCode,
     /// Test harness; never shown in production pickers.
     Mock,
 }
@@ -363,5 +366,15 @@ mod tests {
             serde_json::to_string(&HarnessId::ClaudeCode).unwrap(),
             "\"claude-code\""
         );
+    }
+
+    #[test]
+    fn opencode_harness_id_wire_is_opencode() {
+        assert_eq!(
+            serde_json::to_string(&HarnessId::OpenCode).unwrap(),
+            "\"opencode\""
+        );
+        let back: HarnessId = serde_json::from_str("\"opencode\"").unwrap();
+        assert_eq!(back, HarnessId::OpenCode);
     }
 }

@@ -3293,6 +3293,7 @@ pub(crate) fn harness_brand_icon(harness: HarnessId) -> (&'static str, Option<gp
         // Nous Research's mark (the Hermes product icon), monochrome.
         HarnessId::Hermes => (crate::icons::HERMES_MARK, None),
         HarnessId::Pi => (crate::icons::PI_MARK, None),
+        HarnessId::OpenCode => (crate::icons::OPENCODE_MARK, None),
     }
 }
 

@@ -454,6 +454,23 @@ pub fn default_registry() -> HarnessRegistry {
         Box::new(|| zeron_harness::AcpHarness::pi().installed()),
         Box::new(|| Ok(Arc::new(zeron_harness::AcpHarness::pi()) as Arc<dyn Harness>)),
     );
+    // OpenCode over ACP (`opencode acp`), same lazy pattern: the static
+    // descriptor mirrors AcpHarness::opencode() exactly. No steering extension
+    // (turn boundaries) and no static effort ladder — models/effort come from
+    // live ACP discovery when the CLI is present.
+    registry.register_lazy(
+        HarnessDescriptor {
+            id: HarnessId::OpenCode,
+            name: "OpenCode".into(),
+            supports_steering: true,
+            steering_mode: SteeringMode::TurnBoundary,
+            reasoning_levels: Vec::new(),
+            installed: true,
+            enabled: None,
+        },
+        Box::new(|| zeron_harness::AcpHarness::opencode().installed()),
+        Box::new(|| Ok(Arc::new(zeron_harness::AcpHarness::opencode()) as Arc<dyn Harness>)),
+    );
     registry
 }
 
@@ -510,7 +527,8 @@ mod tests {
                 HarnessId::Cursor,
                 HarnessId::Grok,
                 HarnessId::Hermes,
-                HarnessId::Pi
+                HarnessId::Pi,
+                HarnessId::OpenCode,
             ]
         );
         assert!(registry.resolve(HarnessId::Mock).is_ok());

@@ -280,6 +280,10 @@ async fn claude_and_codex_specs_drive_the_same_wire() {
         ),
         ("pi", AcpHarness::pi().with_executable(fixture_path())),
         (
+            "opencode",
+            AcpHarness::opencode().with_executable(fixture_path()),
+        ),
+        (
             "cursor",
             AcpHarness::cursor().with_executable(fixture_path()),
         ),
@@ -914,6 +918,14 @@ async fn models_fall_back_to_the_static_catalog_when_the_probe_fails() {
     assert_eq!(ids, vec!["default"], "{models:?}");
 }
 
+#[tokio::test]
+async fn opencode_models_fall_back_to_static_catalog_when_probe_fails() {
+    let harness = AcpHarness::opencode().with_executable("/nonexistent/never-an-opencode");
+    let models = harness.models().await.expect("static fallback");
+    let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["default"], "{models:?}");
+}
+
 #[test]
 fn cursor_descriptor_surface_matches_registry_expectations() {
     let cursor = AcpHarness::cursor();
@@ -951,6 +963,16 @@ fn hermes_and_pi_descriptor_surfaces_match_registry_expectations() {
             zeron_proto::ReasoningLevel::Max,
         ]
     );
+}
+
+#[test]
+fn opencode_descriptor_surface_matches_registry_expectations() {
+    let opencode = AcpHarness::opencode();
+    assert_eq!(opencode.id(), HarnessId::OpenCode);
+    assert_eq!(opencode.display_name(), "OpenCode");
+    assert!(opencode.supports_steering());
+    assert_eq!(opencode.steering_mode(), SteeringMode::TurnBoundary);
+    assert!(opencode.reasoning_levels().is_empty());
 }
 
 /// The 2026-08-12 stuck-Working wedge, end to end: a prompt whose turn was
@@ -1313,6 +1335,7 @@ async fn real_all_harnesses_settle_with_a_mid_turn_steer() {
         ("cursor", AcpHarness::cursor()),
         ("grok", AcpHarness::grok()),
         ("pi", AcpHarness::pi()),
+        ("opencode", AcpHarness::opencode()),
     ];
     let mut failures: Vec<String> = Vec::new();
     for (name, h) in agents {
