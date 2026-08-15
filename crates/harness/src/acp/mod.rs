@@ -3,8 +3,8 @@
 //! implementation covers every ACP agent; [`AcpHarness::grok`] configures it
 //! for xAI's Grok Build (`grok agent stdio`), the first registered agent —
 //! [`AcpHarness::hermes`] (Nous Research, `hermes acp`), [`AcpHarness::pi`]
-//! (pi.dev via `pi-acp`) and [`AcpHarness::cursor`] (`cursor-agent acp`)
-//! followed.
+//! (pi.dev via `pi-acp`), [`AcpHarness::cursor`] (`cursor-agent acp`) and
+//! [`AcpHarness::opencode`] (`opencode acp`) followed.
 //!
 //! - `initialize` (protocolVersion 1, fs/terminal capabilities declined) →
 //!   `session/new`, or `session/load` with a fresh-session fallback when
@@ -426,6 +426,61 @@ fn hermes_spec() -> AcpAgentSpec {
     }
 }
 
+fn opencode_install_paths() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        // Official install script fallback + XDG-ish locations.
+        dirs.push(home.join(".opencode").join("bin").join("opencode"));
+        dirs.push(home.join(".local").join("bin").join("opencode"));
+        dirs.push(home.join("bin").join("opencode"));
+        dirs.push(home.join(".npm-global").join("bin").join("opencode"));
+    }
+    dirs.push(PathBuf::from("/opt/homebrew/bin/opencode"));
+    dirs.push(PathBuf::from("/usr/local/bin/opencode"));
+    dirs
+}
+
+fn opencode_spec() -> AcpAgentSpec {
+    AcpAgentSpec {
+        id: HarnessId::OpenCode,
+        display_name: "OpenCode",
+        executable: "opencode",
+        env_override: "OPENCODE_EXECUTABLE",
+        // Native ACP server — no adapter package in between.
+        args: &["acp"],
+        npx_package: None,
+        extra_paths: opencode_install_paths,
+        cli_executable: "opencode",
+        cli_extra_paths: opencode_install_paths,
+        install_hint: "opencode (searched PATH, the login shell's PATH, ~/.opencode/bin, \
+             ~/.local/bin, ~/bin, ~/.npm-global/bin, /opt/homebrew/bin, /usr/local/bin, and \
+             fnm/nvm/volta/pnpm/bun install dirs; install with \
+             `curl -fsSL https://opencode.ai/install | bash` or \
+             `npm install -g opencode-ai`; set OPENCODE_EXECUTABLE to override)",
+        // Models come from the user's OpenCode providers/config. Probe discovery
+        // wins; this pass-through row is only the offline/static fallback.
+        models: || {
+            vec![Model {
+                id: "default".into(),
+                label: "OpenCode default".into(),
+                description: Some(
+                    "Uses the model configured in OpenCode (`opencode` / opencode.json)"
+                        .into(),
+                ),
+                reasoning_levels: Vec::new(),
+                options: Vec::new(),
+            }]
+        },
+        // No `_session/steering` extension assumed: steers deliver at turn boundaries.
+        steering_mode: SteeringMode::TurnBoundary,
+        // No static effort ladder; live `thought_level` (if advertised) fills in.
+        reasoning_levels: &[],
+        prompt_transform: identity_transform,
+        effort_values: default_effort_values,
+        ladder_extras: &[],
+    }
+}
+
 fn pi_spec() -> AcpAgentSpec {
     AcpAgentSpec {
         id: HarnessId::Pi,
@@ -538,6 +593,11 @@ impl AcpHarness {
     /// pi's RPC mode.
     pub fn pi() -> Self {
         Self::with_spec(pi_spec())
+    }
+
+    /// OpenCode (`opencode acp`) — OpenCode's native ACP server.
+    pub fn opencode() -> Self {
+        Self::with_spec(opencode_spec())
     }
 
     /// Use a fixed agent binary instead of PATH/known-location resolution.

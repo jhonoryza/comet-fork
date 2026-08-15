@@ -60,6 +60,7 @@ not built yet).
 | Grok (ACP) | done | Shared `AcpHarness` spec; `grok agent stdio`, turn-boundary steering. |
 | Hermes (ACP) | done | Shared `AcpHarness` spec; `hermes acp` (Nous Research's native ACP server), turn-boundary steering, no effort ladder yet. |
 | Pi (ACP) | done | Shared `AcpHarness` spec; community `pi-acp` adapter (pinned 0.0.33, npx fallback), turn-boundary steering, minimal→max thinking ladder. |
+| OpenCode (ACP) | done | Shared `AcpHarness` spec; `opencode acp` (native ACP server), turn-boundary steering, no static effort ladder; models from live ACP discovery with a `default` static fallback. Opt-in via Settings → Agents (not default-enabled). |
 | Mock harness | done | Scripted event replay; powers tests + the e2e smoke. |
 
 ## §5 Session doc schema

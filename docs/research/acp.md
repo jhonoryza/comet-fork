@@ -45,6 +45,13 @@
   ride pi's own provider config (catalog advertises a `default` pass-through
   entry); thinking ladder minimal→max maps onto zeron's levels via the
   generic `thought_level` preference ladder ("off" has no zeron tier).
+- **OpenCode registered**: `AcpHarness::opencode()` runs OpenCode's native ACP
+  server (`opencode acp`; install via `curl -fsSL https://opencode.ai/install | bash`
+  or `npm i -g opencode-ai`; `OPENCODE_EXECUTABLE` overrides). No npm ACP
+  adapter package. No `_session/steering` assumed → turn-boundary steering;
+  empty static reasoning ladder; static model fallback is a single `default`
+  pass-through (user providers live in OpenCode config). Not part of zeron
+  agent-account credential swap.
 - **ACP is the source of truth for model lists** (2026-08-08; preference
   order inverted 2026-08-09): `models()` runs a short-lived probe
   (initialize → `session/new`, the `discover_commands` pattern) and reads

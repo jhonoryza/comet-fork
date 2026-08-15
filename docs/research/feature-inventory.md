@@ -189,7 +189,7 @@ display EXCLUDED. File paths refer to the reference repo.
 - HarnessShape: id, name, supportsSteering, steeringMode (step-boundary|turn-boundary),
   reasoningLevels, models, run(request, controls) -> AgentEvent stream.
 - RunControls: requestInput(questions)->answers (blocks agent); steering mailbox.
-- HarnessId: claude-code | codex | cursor. ReasoningLevel: minimal..ultra + ultracode + ultrathink
+- HarnessId: claude-code | codex | cursor | opencode. ReasoningLevel: minimal..ultra + ultracode + ultrathink
   (prompt prefix). Sandbox: read-only|workspace-write|danger-full-access.
 - Claude adapter behaviors to replicate: model discovery, effort ladders, context-window option
   ([1m] suffix), fast mode, always-thinking models, AskUserQuestion -> requestInput, steering via
