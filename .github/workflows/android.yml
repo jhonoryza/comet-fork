@@ -16,14 +16,17 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
       - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: stable, targets: aarch64-linux-android,x86_64-linux-android }
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,x86_64-linux-android
       - uses: nttld/setup-ndk@v1
         with: { ndk-version: r26d }
+      - uses: gradle/actions/setup-gradle@v3
       - name: Unit + lint
         working-directory: apps/android
         run: |
-          ./gradlew :app:testDebugUnitTest --stacktrace
-          ./gradlew lint --stacktrace
+          gradle :app:testDebugUnitTest --stacktrace
+          gradle lint --stacktrace
       - name: Rust host checks
         run: cargo test -p zeron-loro-android --lib
 
@@ -42,7 +45,7 @@ jobs:
           arch: x86_64
           script: |
             cd apps/android
-            ./gradlew :app:connectedDebugAndroidTest --stacktrace
+            gradle :app:connectedDebugAndroidTest --stacktrace
 
   apk:
     if: github.ref == 'refs/heads/main'
@@ -54,13 +57,16 @@ jobs:
         with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
       - uses: dtolnay/rust-toolchain@stable
-        with: { toolchain: stable, targets: aarch64-linux-android }
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with: { ndk-version: r26d }
+      - uses: gradle/actions/setup-gradle@v3
       - name: Build arm64 internal APK
         working-directory: apps/android
         run: |
-          ./gradlew :app:assembleDebug --stacktrace
+          gradle :app:assembleDebug --stacktrace
           unzip -l app/build/outputs/apk/debug/*.apk | grep -E "lib/arm64|lib/x86" || true
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/arm64") -ge 1
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/x86_64") -eq 0 || echo "debug may include x86_64; release must not"
