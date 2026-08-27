@@ -19,7 +19,7 @@ class NativeSmokeTest {
         val doc = RealNativeLoroDoc()
         val json0 = doc.getDeepValueJson()
         assertTrue(json0 == "{}" || json0 == "null")
-        val id = doc.appendCommand("run", """{"text":"hi"}""", "android-instrumented")
+        val id = doc.appendCommand("run", """{"text":"hi"}""", "android-instrumented").getValue("id") as String
         assertTrue(id.isNotBlank())
         val json1 = doc.getDeepValueJson()
         assertTrue("deep value should include command id '$id': $json1", json1.contains(id))
