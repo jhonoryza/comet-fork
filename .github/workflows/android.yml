@@ -43,9 +43,7 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          script: |
-            cd apps/android
-            gradle :app:connectedDebugAndroidTest --stacktrace
+          script: cd apps/android && gradle :app:connectedDebugAndroidTest --stacktrace
 
   apk:
     if: github.ref == 'refs/heads/main'
