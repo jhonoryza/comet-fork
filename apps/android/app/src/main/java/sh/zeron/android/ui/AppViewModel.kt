@@ -18,6 +18,23 @@ class AppViewModel(
 
     fun onForeground() { registry.kick() }
 
+    fun signIn() {
+        viewModelScope.launch {
+            _state.value = AppState.SigningIn
+            // Fake org discovery — real impl calls auth.client.orgs()
+            kotlinx.coroutines.delay(400)
+            _state.value = AppState.SelectingOrg(listOf("Demo Org"))
+        }
+    }
+
+    fun selectOrg(orgId: String) {
+        viewModelScope.launch {
+            _state.value = AppState.Connecting
+            kotlinx.coroutines.delay(300)
+            _state.value = AppState.Ready
+        }
+    }
+
     fun signOut() {
         viewModelScope.launch {
             registry.stop()
