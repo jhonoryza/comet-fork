@@ -38,6 +38,13 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with: { ndk-version: r26d }
+      - uses: gradle/actions/setup-gradle@v3
       - name: x86_64 native + emulator smoke
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -46,7 +53,6 @@ jobs:
           script: cd apps/android && gradle :app:connectedDebugAndroidTest --stacktrace
 
   apk:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [unit]
     steps:
@@ -69,4 +75,5 @@ jobs:
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/arm64") -ge 1
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/x86_64") -eq 0 || echo "debug may include x86_64; release must not"
       - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
         with: { name: zeron-android-debug-apk, path: apps/android/app/build/outputs/apk/debug/*.apk }
