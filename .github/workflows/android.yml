@@ -55,7 +55,11 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
+          disable-animations: true
+          boots-timeout: 600
           script: |
+            adb start-server || true
+            adb wait-for-device || true
             ls apps/android/app/src/main/jniLibs/x86_64/ 2>/dev/null || true
             cd apps/android && gradle :app:connectedDebugAndroidTest --stacktrace
 
