@@ -19,8 +19,11 @@ class AppViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow<AppState>(AppState.SignedOut)
     val state: StateFlow<AppState> = _state
+    val chats = registry.chats
 
     fun onForeground() { registry.kick() }
+
+    fun openChat(id: String) { /* open SessionScreen — next task */ }
 
     fun signIn() {
         viewModelScope.launch {
@@ -30,7 +33,7 @@ class AppViewModel(
                     val user = DemoConfig.devUserId
                     val org = DemoConfig.devOrgId
                     auth.signInDev(user, org)
-                    _state.value = AppState.SelectingOrg(listOf(org))
+                    _state.value = AppState.SelectingOrg(listOf(AuthOrg(org, org, org)))
                 } else {
                     _state.value = AppState.Fatal("WorkOS flow not wired for dev APK")
                 }

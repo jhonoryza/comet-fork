@@ -45,10 +45,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 val state by viewModel.state.collectAsState()
+                val chats by viewModel.chats.collectAsState()
                 AppRoot(
                     state = state,
                     onSignIn = { viewModel.signIn() },
                     onOrgSelect = { viewModel.selectOrg(it) },
+                    chats = chats,
+                    onOpenChat = { viewModel.openChat(it) },
                 )
             }
         }
