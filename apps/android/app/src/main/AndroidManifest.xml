@@ -4,7 +4,8 @@
         android:name=".ZeronApp"
         android:label="Zeron"
         android:theme="@style/Theme.Zeron"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"
