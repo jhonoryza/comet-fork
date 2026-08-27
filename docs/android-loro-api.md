@@ -4,7 +4,9 @@ Scope: only what Android needs to mirror workspace + session docs. Do not expose
 
 ## Decision
 
-Rust wrapper crate holds the Loro `1.13.x` dependency (same as desktop/engine). Kotlin sees only a small `LoroDoc` interface; CRDT merge stays behind FFI.
+Rust wrapper crate: `crates/zeron-loro-android` (added in Phase 1). Separate from `crates/doc`/`crates/sync`/`crates/engine`; depends on `loro = 1.13` (workspace pin, same as desktop) and `zeron-doc` for schema tests — not a second CRDT version. Kotlin sees only `ZeronLoroDoc` via UniFFI; CRDT merge stays behind FFI.
+
+Chosen after evaluating extending `crates/doc` vs new crate — new crate keeps Android FFI surface small, avoids coupling desktop engine to UniFFI cdylib, and isolates `crate-type = ["cdylib","lib"]`.
 
 ## Document lifecycle
 
@@ -61,12 +63,15 @@ Evidence links: `crates/doc/src/lib.rs`, `schema.rs`, `registry.rs`, `docs/resea
 
 Full LoroText/Map/List mutators, UndoManager, EphemeralStore, `ensure_mergeable_*`, `redact`, `fork_at`, `StateOnly`/`ShallowSnapshot` — unless the checkpoint flow proves they are needed. Keep out of MVP.
 
-## Kotlin wrapper rules (preview of Task 1.5)
+## Kotlin wrapper rules (Task 1.5 — memory & threading)
 
-- Single `LoroDoc` interface; UI never imports UniFFI names.
-- `close()` explicit; finalizer is safety net only.
-- Native calls off main thread (`Dispatchers.IO` / `withContext`), reads safe to observe on main via subscription.
-- Cancellation propagates; import/export errors map to `AppError.Loro`.
+- Single `LoroDoc` Kotlin interface `ZeronLoroDoc` hides UniFFI names; UI never imports generated types.
+- Every native handle (`ZeronLoroDoc`) has explicit `close()`; `AutoCloseable` + `finalize` as safety net only — do not retain after close; use-after-close → `LoroAndroidError::Closed`.
+- Native subscription guard dropped on `close()`; no callback after dispose.
+- Callback threading: Rust notifies on its thread; Kotlin marshals to `Dispatchers.Main` via `withContext` in wrapper. No blocking call on `Main`.
+- Blocking native ops (`import`, `export`, `getDeepValue`) run on `Dispatchers.IO` (`withContext(Dispatchers.IO)`); never call from `@Composable` directly.
+- Cancellation: coroutine cancellation drops pending native work; `close()` is idempotent.
+- Errors cross FFI as `LoroAndroidError` (typed), never panics.
 
 ## Verification
 
