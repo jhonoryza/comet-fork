@@ -147,7 +147,7 @@ pub extern "C" fn zla_append_command(handle: *mut std::ffi::c_void, cmd_json: *c
             match g.as_ref() {
                 Some(doc) => {
                     let list = doc.get_list("commands");
-                    list.insert(list.len() as i64, loro::LoroValue::from(value));
+                    list.insert(list.len(), loro::LoroValue::from(value));
                     true
                 }
                 None => false,
