@@ -88,6 +88,55 @@ pub fn doc_close(doc: Arc<ZeronLoroDoc>) -> Result<(), LoroAndroidError> {
     Ok(())
 }
 
+// ── C ABI (dyn-loaded from Kotlin via JNI `registerNativeMethods`, or raw)
+//    These are the single stable entry points the Android `System.loadLibrary`
+//    boundary needs. Handles are opaque `*mut ZeronLoroDoc` passed by Kotlin.
+
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_create() -> *mut std::ffi::c_void {
+    Arc::into_raw(create_doc()) as *mut std::ffi::c_void
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_read(handle: *mut std::ffi::c_void) -> *mut std::ffi::c_char {
+    if handle.is_null() { return std::ptr::null_mut() }
+    // Borrow without taking the Arc: the pointer is owned by Kotlin until
+    // zla_free. Reconstruct a transient Arc from a clone reference is unsafe;
+    // instead increment the refcount properly.
+    let arc: Arc<ZeronLoroDoc> = {
+        let ptr = handle as *const ZeronLoroDoc;
+        unsafe { Arc::increment_strong_count(ptr); Arc::from_raw(ptr) }
+    };
+    let json = doc_get_deep_value(arc).unwrap_or_else(|_| "{}".into());
+    std::ffi::CString::new(json).unwrap_or_default().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_import(handle: *mut std::ffi::c_void, data: *const u8, len: usize) -> i32 {
+    if handle.is_null() { return 2 }
+    let arc: Arc<ZeronLoroDoc> = {
+        let ptr = handle as *const ZeronLoroDoc;
+        unsafe { Arc::increment_strong_count(ptr); Arc::from_raw(ptr) }
+    };
+    let slice = unsafe { std::slice::from_raw_parts(data, len) };
+    let ok = {
+        let g = arc.inner.lock().unwrap();
+        match g.as_ref() {
+            Some(doc) => doc.import(slice).is_ok(),
+            None => false,
+        }
+    };
+    drop(arc);
+    if ok { 0 } else { 1 }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_free(handle: *mut std::ffi::c_void) {
+    if handle.is_null() { return }
+    let ptr = handle as *const ZeronLoroDoc;
+    unsafe { Arc::from_raw(ptr) }; // drops the owned ref from the Kotlin side
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +156,18 @@ mod tests {
         assert!(doc_from_bytes(vec![0, 1, 2, 3]).is_err());
         let doc = create_doc();
         assert!(doc_import_bytes(doc, vec![0xFF, 0xFF]).is_err());
+    }
+
+    #[test]
+    fn cabi_roundtrip() {
+        let h = zla_create();
+        assert!(!h.is_null());
+        // zla_read on empty doc returns valid JSON
+        let s = zla_read(h);
+        assert!(!s.is_null());
+        let json = unsafe { std::ffi::CStr::from_ptr(s).to_string_lossy().into_owned() };
+        assert_eq!("{}", json);
+        unsafe { std::ffi::CString::from_raw(s) };
+        zla_free(h);
     }
 }

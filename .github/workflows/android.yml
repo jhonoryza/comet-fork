@@ -46,12 +46,18 @@ jobs:
       - uses: nttld/setup-ndk@v1
         with: { ndk-version: r26d }
       - uses: gradle/actions/setup-gradle@v3
+      - name: Build native Loro lib (x86_64)
+        run: |
+          cargo install cargo-ndk --locked || true
+          cargo ndk -t x86_64 -o apps/android/app/src/main/jniLibs build --release -p zeron-loro-android
       - name: x86_64 native + emulator smoke
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
-          script: cd apps/android && gradle :app:connectedDebugAndroidTest --stacktrace
+          script: |
+            ls apps/android/app/src/main/jniLibs/x86_64/ 2>/dev/null || true
+            cd apps/android && gradle :app:connectedDebugAndroidTest --stacktrace
 
   apk:
     runs-on: ubuntu-latest
@@ -68,13 +74,19 @@ jobs:
       - uses: nttld/setup-ndk@v1
         with: { ndk-version: r26d }
       - uses: gradle/actions/setup-gradle@v3
-      - name: Build arm64 internal APK
-        working-directory: apps/android
+      - name: Build native Loro lib (arm64)
         run: |
-          gradle :app:assembleDebug --stacktrace
+          cargo install cargo-ndk --locked || true
+          cargo ndk -t arm64-v8a -o apps/android/app/src/main/jniLibs build --release -p zeron-loro-android
+      - name: Build arm64 internal APK
+        run: |
+          ls apps/android/app/src/main/jniLibs/arm64-v8a/
+          cd apps/android && gradle :app:assembleDebug --stacktrace
           unzip -l app/build/outputs/apk/debug/*.apk | grep -E "lib/arm64|lib/x86" || true
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/arm64") -ge 1
           test $(unzip -l app/build/outputs/apk/debug/*.apk | grep -c "lib/x86_64") -eq 0 || echo "debug may include x86_64; release must not"
+          test -f app/src/main/jniLibs/arm64-v8a/libzeron_loro_android.so
+          unzip -l app/build/outputs/apk/debug/*.apk | grep libzeron_loro_android || true
       - uses: actions/upload-artifact@v4
         if: github.ref == 'refs/heads/main'
         with: { name: zeron-android-debug-apk, path: apps/android/app/build/outputs/apk/debug/*.apk }
