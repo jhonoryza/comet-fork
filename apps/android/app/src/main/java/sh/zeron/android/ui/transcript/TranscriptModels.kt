@@ -14,7 +14,10 @@ fun toUiRows(parts: List<sh.zeron.android.data.Part>): List<UiRow> {
     return parts.mapNotNull {
         when (it) {
             is sh.zeron.android.data.Part.Text -> UiRow.TextRow(it.id, it.text)
-            is sh.zeron.android.data.Part.Tool -> UiRow.ToolGroup(it.id, listOf(ToolCall(it.call, "", null)))
+            is sh.zeron.android.data.Part.Reasoning -> UiRow.TextRow(it.id, it.text)
+            is sh.zeron.android.data.Part.Tool -> UiRow.ToolGroup(it.id, listOf(ToolCall(it.call, "", null, it.isError)))
+            is sh.zeron.android.data.Part.Input -> UiRow.InputRow(it.id, it.question)
+            is sh.zeron.android.data.Part.Error -> UiRow.ErrorRow(it.id, it.message)
         }
     }
 }

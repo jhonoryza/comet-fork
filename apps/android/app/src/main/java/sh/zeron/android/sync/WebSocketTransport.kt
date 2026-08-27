@@ -11,6 +11,7 @@ interface WebSocketTransport {
 sealed class WsMessage {
     data class Text(val text: String) : WsMessage()
     data class Binary(val bytes: ByteArray) : WsMessage()
+    object Connected : WsMessage()
     object Closed : WsMessage()
 }
 
