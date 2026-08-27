@@ -130,6 +130,35 @@ pub extern "C" fn zla_import(handle: *mut std::ffi::c_void, data: *const u8, len
     if ok { 0 } else { 1 }
 }
 
+/// Append a durable command entry to the root `commands` LoroList (schema.rs).
+/// `cmd_json` is a complete entry `{id,kind,payload,issuedBy,issuedAt,status,resolution}`.
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_append_command(handle: *mut std::ffi::c_void, cmd_json: *const std::ffi::c_char) -> i32 {
+    if handle.is_null() || cmd_json.is_null() { return 2 }
+    let ok = {
+        let arc = {
+            let ptr = handle as *const ZeronLoroDoc;
+            unsafe { Arc::increment_strong_count(ptr); Arc::from_raw(ptr) }
+        };
+        let raw = unsafe { std::ffi::CStr::from_ptr(cmd_json).to_string_lossy().into_owned() };
+        let value = serde_json::from_str::<serde_json::Value>(&raw).unwrap_or(serde_json::json!({}));
+        let r = {
+            let g = arc.inner.lock().unwrap();
+            match g.as_ref() {
+                Some(doc) => {
+                    let list = doc.get_list("commands");
+                    list.insert(list.len().unwrap_or(0) as i64, loro::LoroValue::from(value));
+                    true
+                }
+                None => false,
+            }
+        };
+        drop(arc);
+        r
+    };
+    if ok { 0 } else { 1 }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn zla_free(handle: *mut std::ffi::c_void) {
     if handle.is_null() { return }
@@ -168,6 +197,19 @@ mod tests {
         let json = unsafe { std::ffi::CStr::from_ptr(s).to_string_lossy().into_owned() };
         assert_eq!("{}", json);
         unsafe { std::ffi::CString::from_raw(s) };
+        zla_free(h);
+    }
+
+    #[test]
+    fn cabi_append_command_roundtrip() {
+        use std::ffi::CString;
+        let h = zla_create();
+        let cmd = CString::new(r#"{"id":"cmd1","kind":"run","payload":"hi","issuedBy":"android","issuedAt":0,"status":"pending","resolution":null}"#).unwrap();
+        assert_eq!(0, zla_append_command(h, cmd.as_ptr()));
+        let s = zla_read(h);
+        let json = unsafe { std::ffi::CStr::from_ptr(s).to_string_lossy().into_owned() };
+        unsafe { std::ffi::CString::from_raw(s) };
+        assert!(json.contains("cmd1"), "deep value should contain the appended command: {json}");
         zla_free(h);
     }
 }
