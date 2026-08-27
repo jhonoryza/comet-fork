@@ -199,7 +199,7 @@ pub mod jni {
 
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_readJson(
-        env: JNIEnv, _cls: JClass, handle: jlong) -> jstring {
+        mut env: JNIEnv, _cls: JClass, handle: jlong) -> jstring {
         let ptr = zla_read(handle as *mut std::ffi::c_void);
         if ptr.is_null() { return env.new_string("{}").unwrap().into_raw(); }
         let s = unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() };
@@ -210,7 +210,7 @@ pub mod jni {
     /// Bytes are passed as a hexadecimal string to avoid byte-array marshaling.
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_import(
-        env: JNIEnv, _cls: JClass, handle: jlong, hex: jstring) -> jint {
+         mut env: JNIEnv, _cls: JClass, handle: jlong, hex: jstring) -> jint {
         if hex.is_null() { return 2 }
         let jstr = unsafe { jni::objects::JString::from_raw(hex) };
         let s: String = env.get_string(&jstr).unwrap().into();
@@ -219,7 +219,7 @@ pub mod jni {
 
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_appendCommand(
-        env: JNIEnv, _cls: JClass, handle: jlong, cmd: jstring) -> jint {
+         mut env: JNIEnv, _cls: JClass, handle: jlong, cmd: jstring) -> jint {
         if cmd.is_null() { return 2 }
         let jstr = unsafe { jni::objects::JString::from_raw(cmd) };
         let s: String = env.get_string(&jstr).unwrap().into();
