@@ -44,3 +44,4 @@ Format check (if ktlint added): `./gradlew ktlintCheck` — documented but not r
 ## Architecture guardrails
 
 See `docs/android-protocol-contract.md` + `docs/android-loro-api.md`. Kotlin never does CRDT; all Loro via `ZeronLoroDoc`.
+# trigger Thu Aug 27 07:09:09 AM UTC 2026
