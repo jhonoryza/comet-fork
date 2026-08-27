@@ -3,6 +3,9 @@ package sh.zeron.android.data
 import org.json.JSONArray
 import org.json.JSONObject
 
+data class ChatRow(val id: String, val title: String?, val archived: Boolean, val spaceId: String?)
+data class SpaceRow(val id: String, val path: String)
+
 /** Registry row — wire shape `{kind,id,seq,deleted,delHlc?,fields,clocks}`. */
 data class RegistryRow(
     val kind: String,
