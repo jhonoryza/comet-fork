@@ -46,12 +46,18 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 val state by viewModel.state.collectAsState()
                 val chats by viewModel.chats.collectAsState()
+                val selected by viewModel.selectedChat.collectAsState()
+                val transcript by viewModel.transcript.collectAsState()
                 AppRoot(
                     state = state,
                     onSignIn = { viewModel.signIn() },
                     onOrgSelect = { viewModel.selectOrg(it) },
                     chats = chats,
                     onOpenChat = { viewModel.openChat(it) },
+                    selectedChat = selected,
+                    transcript = transcript,
+                    onBack = { viewModel.closeChat() },
+                    onSend = { viewModel.sendPrompt(it) },
                 )
             }
         }

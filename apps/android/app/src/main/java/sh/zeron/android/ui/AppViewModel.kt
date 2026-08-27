@@ -9,8 +9,12 @@ import sh.zeron.android.auth.AuthOrg
 import sh.zeron.android.auth.AuthStateMachine
 import sh.zeron.android.config.AppConfig
 import sh.zeron.android.config.DemoConfig
+import sh.zeron.android.data.SessionAdapter
+import sh.zeron.android.data.Transcript
+import sh.zeron.android.loro.FakeLoroDoc
 import sh.zeron.android.sync.AppState
 import sh.zeron.android.sync.RegistrySync
+import sh.zeron.android.sync.SessionRepository
 
 class AppViewModel(
     private val auth: AuthStateMachine,
@@ -21,9 +25,42 @@ class AppViewModel(
     val state: StateFlow<AppState> = _state
     val chats = registry.chats
 
+    private val _selectedChat = MutableStateFlow<String?>(null)
+    val selectedChat: StateFlow<String?> = _selectedChat
+
+    /** Live session repo for the open chat; null while in workspace. */
+    private val _transcript = MutableStateFlow(Transcript(emptyList()))
+    val transcript: StateFlow<Transcript> = _transcript
+
     fun onForeground() { registry.kick() }
 
-    fun openChat(id: String) { /* open SessionScreen — next task */ }
+    fun openChat(id: String) {
+        _selectedChat.value = id
+        viewModelScope.launch {
+            // Provisional: native Loro import wires the real doc. For now the
+            // adapter reads an (empty) doc so the shell + composer are reachable.
+            val repo = SessionRepository(
+                chatId = id,
+                doc = FakeLoroDoc("{}"),
+                adapter = SessionAdapter(FakeLoroDoc("{}")),
+                sync = sh.zeron.android.sync.ChatSync("", sh.zeron.android.sync.FakeWebSocketTransport(), sh.zeron.android.sync.FakeHttpTransport()),
+            )
+            _transcript.value = repo.transcript.value
+        }
+    }
+
+    fun closeChat() {
+        _selectedChat.value = null
+        _transcript.value = Transcript(emptyList())
+    }
+
+    fun sendPrompt(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            val cmd = SessionAdapter(FakeLoroDoc("{}")).queueCommand("run", text)
+            // optimistic echo; durable via command ledger once native doc wired
+        }
+    }
 
     fun signIn() {
         viewModelScope.launch {
