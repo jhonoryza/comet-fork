@@ -17,6 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uniffi = { version = "0.28", features = ["tokio"] }
+jni = { version = "0.21", default-features = false }
 
 [build-dependencies]
 uniffi = { version = "0.28", features = ["build"] }

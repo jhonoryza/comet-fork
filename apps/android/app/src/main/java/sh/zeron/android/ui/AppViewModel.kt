@@ -1,6 +1,7 @@
 package sh.zeron.android.ui
 
 import androidx.lifecycle.ViewModel
+import org.json.JSONObject
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +12,8 @@ import sh.zeron.android.config.AppConfig
 import sh.zeron.android.config.DemoConfig
 import sh.zeron.android.data.SessionAdapter
 import sh.zeron.android.data.Transcript
-import sh.zeron.android.loro.FakeLoroDoc
+import sh.zeron.android.loro.LoroDoc
+import sh.zeron.android.loro.RealNativeLoroDoc
 import sh.zeron.android.sync.AppState
 import sh.zeron.android.sync.RegistrySync
 import sh.zeron.android.sync.SessionRepository
@@ -28,7 +30,8 @@ class AppViewModel(
     private val _selectedChat = MutableStateFlow<String?>(null)
     val selectedChat: StateFlow<String?> = _selectedChat
 
-    /** Live session repo for the open chat; null while in workspace. */
+    /** Live session doc for the open chat; null while in workspace. */
+    private var openDoc: LoroDoc? = null
     private val _transcript = MutableStateFlow(Transcript(emptyList()))
     val transcript: StateFlow<Transcript> = _transcript
 
@@ -36,29 +39,39 @@ class AppViewModel(
 
     fun openChat(id: String) {
         _selectedChat.value = id
-        viewModelScope.launch {
-            // Provisional: native Loro import wires the real doc. For now the
-            // adapter reads an (empty) doc so the shell + composer are reachable.
-            val repo = SessionRepository(
-                chatId = id,
-                doc = FakeLoroDoc("{}"),
-                adapter = SessionAdapter(FakeLoroDoc("{}")),
-                sync = sh.zeron.android.sync.ChatSync("", sh.zeron.android.sync.FakeWebSocketTransport(), sh.zeron.android.sync.FakeHttpTransport()),
-            )
-            _transcript.value = repo.transcript.value
+        closeDoc()
+        val doc = try { RealNativeLoroDoc() } catch (e: Throwable) {
+            _state.value = AppState.Fatal("native doc failed: ${e.message}")
+            return
         }
+        openDoc = doc
+        viewModelScope.launch {
+            _transcript.value = SessionAdapter(doc).transcript()
+        }
+    }
+
+    private fun closeDoc() {
+        openDoc?.close()
+        openDoc = null
     }
 
     fun closeChat() {
         _selectedChat.value = null
+        closeDoc()
         _transcript.value = Transcript(emptyList())
     }
 
     fun sendPrompt(text: String) {
         if (text.isBlank()) return
+        val doc = openDoc ?: return
         viewModelScope.launch {
-            val cmd = SessionAdapter(FakeLoroDoc("{}")).queueCommand("run", text)
-            // optimistic echo; durable via command ledger once native doc wired
+            try {
+                SessionAdapter(doc).queueCommand("run", """{"text":${JSONObject.quote(text)}}""")
+                // cursor amnesty + push wired in the sync task; durable in local doc now.
+                _transcript.value = SessionAdapter(doc).transcript()
+            } catch (e: Throwable) {
+                _state.value = AppState.Fatal("send failed: ${e.message}")
+            }
         }
     }
 
