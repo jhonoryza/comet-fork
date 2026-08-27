@@ -19,6 +19,15 @@ class AuthStateMachine(
         scoped
     }
 
+    /** Dev mode (AUTH_MODE=dev edge): bearer IS the identity, no exchange. */
+    suspend fun signInDev(userId: String, orgId: String): AuthTokens = refreshMutex.withLock {
+        val bearer = "$userId@$orgId"
+        val t = AuthTokens(bearer, bearer)
+        tokens.save(t.accessToken, t.refreshToken)
+        selectedOrgId = orgId
+        t
+    }
+
     suspend fun signOut() = refreshMutex.withLock {
         tokens.clear()
         selectedOrgId = null

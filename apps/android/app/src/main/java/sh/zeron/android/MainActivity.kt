@@ -10,24 +10,31 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import sh.zeron.android.auth.AuthStateMachine
-import sh.zeron.android.auth.FakeAuthClient
-import sh.zeron.android.data.InMemoryDeviceIdStore
-import sh.zeron.android.data.InMemoryTokenStore
-import sh.zeron.android.sync.FakeHttpTransport
-import sh.zeron.android.sync.FakeWebSocketTransport
+import sh.zeron.android.auth.HttpAuthClient
+import sh.zeron.android.config.DemoConfig
+import sh.zeron.android.data.PersistentDeviceIdStore
+import sh.zeron.android.data.SecureTokenStore
+import sh.zeron.android.sync.OkHttpTransport
+import sh.zeron.android.sync.OkHttpWebSocket
 import sh.zeron.android.sync.RegistrySync
 import sh.zeron.android.ui.AppRoot
 import sh.zeron.android.ui.AppViewModel
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val tokens = InMemoryTokenStore()
-                val auth = AuthStateMachine(FakeAuthClient(), tokens)
-                val registry = RegistrySync(FakeWebSocketTransport(), FakeHttpTransport())
-                return AppViewModel(auth, registry) as T
+                val context = applicationContext
+                val tokens = SecureTokenStore(context)
+                val http = OkHttpTransport()
+                val deviceIdStore = PersistentDeviceIdStore(context.getSharedPreferences("zeron", MODE_PRIVATE))
+                val deviceId = runBlocking { deviceIdStore.getOrCreate() }
+                val config = DemoConfig.appConfig(deviceId)
+                val auth = AuthStateMachine(HttpAuthClient(config, http), tokens)
+                val registry = RegistrySync(OkHttpWebSocket(), http)
+                return AppViewModel(auth, registry, config) as T
             }
         }
     }

@@ -43,7 +43,10 @@ class OkHttpTransport(
     }
 }
 
-class FakeHttpTransport(var handler: suspend (String) -> HttpResponse = { HttpResponse(200, ByteArray(0)) }) : HttpTransport {
-    override suspend fun get(url: String, headers: Map<String, String>) = handler(url)
-    override suspend fun post(url: String, body: ByteArray, headers: Map<String, String>) = handler(url)
+class FakeHttpTransport(
+    var handler: suspend (String, ByteArray, Map<String, String>) -> HttpResponse =
+        { _, _, _ -> HttpResponse(200, ByteArray(0)) },
+) : HttpTransport {
+    override suspend fun get(url: String, headers: Map<String, String>) = handler(url, ByteArray(0), headers)
+    override suspend fun post(url: String, body: ByteArray, headers: Map<String, String>) = handler(url, body, headers)
 }
