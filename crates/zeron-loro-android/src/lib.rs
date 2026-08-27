@@ -67,7 +67,7 @@ pub fn doc_get_deep_value(doc: Arc<ZeronLoroDoc>) -> Result<String, LoroAndroidE
 pub fn doc_get_frontiers(doc: Arc<ZeronLoroDoc>) -> Result<String, LoroAndroidError> {
     doc.with(|d| {
         let f = d.state_frontiers();
-        Ok(serde_json::to_string(&f).unwrap_or_else(|_| "[]".into()))
+        Ok(format!("{f:?}"))
     })
 }
 
