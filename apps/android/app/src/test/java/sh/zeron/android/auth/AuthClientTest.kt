@@ -6,6 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import sh.zeron.android.config.AppConfig
 import sh.zeron.android.config.AuthMode
+import sh.zeron.android.core.AppError
 import sh.zeron.android.sync.FakeHttpTransport
 import sh.zeron.android.sync.HttpResponse
 
