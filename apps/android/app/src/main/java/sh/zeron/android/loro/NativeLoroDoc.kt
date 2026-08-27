@@ -16,7 +16,8 @@ class RealNativeLoroDoc : LoroDoc {
 
     override suspend fun importBytes(bytes: ByteArray) = withContext(Dispatchers.IO) {
         if (bytes.isEmpty()) throw AppError.Loro("empty bytes")
-        val code = NativeDocBridge.import(handle, bytes)
+        val hex = bytes.joinToString("") { "%02x".format(it) }
+        val code = NativeDocBridge.import(handle, hex)
         if (code != 0) throw AppError.Loro("import failed (code $code)")
     }
 

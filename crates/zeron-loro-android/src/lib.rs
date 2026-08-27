@@ -171,21 +171,35 @@ pub extern "C" fn zla_free(handle: *mut std::ffi::c_void) {
 //    bytes via `GetByteArrayElements`, strings via Java String.
 #[cfg(any(target_os = "android", target_os = "linux"))]
 pub mod jni {
-    use jni::objects::JByteArray;
-    use jni::sys::{jbyteArray, jint, jlong, jstring};
+    use jni::objects::JClass;
+    use jni::sys::{jint, jlong, jstring};
     use jni::JNIEnv;
 
     use super::{zla_append_command, zla_create, zla_free, zla_import, zla_read};
 
+    fn zla_import_hex(handle: jlong, hex: &str) -> jint {
+        let mut out = Vec::with_capacity(hex.len() / 2);
+        let b = hex.as_bytes();
+        let mut i = 0;
+        while i + 1 < b.len() {
+            let hi = (b[i] as char).to_digit(16).unwrap_or(0) as u8;
+            let lo = (b[i + 1] as char).to_digit(16).unwrap_or(0) as u8;
+            out.push((hi << 4) | lo);
+            i += 2;
+        }
+        if out.is_empty() { return zla_import(handle as *mut std::ffi::c_void, std::ptr::null(), 0) as jint; }
+        zla_import(handle as *mut std::ffi::c_void, out.as_ptr(), out.len()) as jint
+    }
+
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_createDoc(
-        _env: JNIEnv, _cls: jni::objects::JClass) -> jlong {
+        _env: JNIEnv, _cls: JClass) -> jlong {
         zla_create() as jlong
     }
 
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_readJson(
-        env: JNIEnv, _cls: jni::objects::JClass, handle: jlong) -> jstring {
+        env: JNIEnv, _cls: JClass, handle: jlong) -> jstring {
         let ptr = zla_read(handle as *mut std::ffi::c_void);
         if ptr.is_null() { return env.new_string("{}").unwrap().into_raw(); }
         let s = unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() };
@@ -193,32 +207,29 @@ pub mod jni {
         env.new_string(&s).unwrap().into_raw()
     }
 
+    /// Bytes are passed as a hexadecimal string to avoid byte-array marshaling.
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_import(
-        env: JNIEnv, _cls: jni::objects::JClass, handle: jlong, bytes: jbyteArray) -> jint {
-        if bytes.is_null() { return zla_import(handle as *mut std::ffi::c_void, std::ptr::null(), 0) as jint; }
-        let arr = JByteArray::from_raw(bytes);
-        let guard = match env.get_byte_array_elements(&arr, std::ptr::null_mut()) {
-            Ok(g) => g,
-            Err(_) => return 2,
-        };
-        let code = zla_import(handle as *mut std::ffi::c_void, guard.as_ptr() as *const u8, guard.size() as usize);
-        drop(guard);
-        code as jint
+        env: JNIEnv, _cls: JClass, handle: jlong, hex: jstring) -> jint {
+        if hex.is_null() { return 2 }
+        let jstr = unsafe { jni::objects::JString::from_raw(hex) };
+        let s: String = env.get_string(&jstr).unwrap().into();
+        zla_import_hex(handle, &s)
     }
 
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_appendCommand(
-        env: JNIEnv, _cls: jni::objects::JClass, handle: jlong, cmd: jstring) -> jint {
+        env: JNIEnv, _cls: JClass, handle: jlong, cmd: jstring) -> jint {
         if cmd.is_null() { return 2 }
-        let s: String = env.get_string(&jni::objects::JString::from_raw(cmd)).unwrap().into();
+        let jstr = unsafe { jni::objects::JString::from_raw(cmd) };
+        let s: String = env.get_string(&jstr).unwrap().into();
         let c = std::ffi::CString::new(s).unwrap_or_default();
         zla_append_command(handle as *mut std::ffi::c_void, c.as_ptr()) as jint
     }
 
     #[unsafe(no_mangle)]
     pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_free(
-        _env: JNIEnv, _cls: jni::objects::JClass, handle: jlong) {
+        _env: JNIEnv, _cls: JClass, handle: jlong) {
         zla_free(handle as *mut std::ffi::c_void);
     }
 }
