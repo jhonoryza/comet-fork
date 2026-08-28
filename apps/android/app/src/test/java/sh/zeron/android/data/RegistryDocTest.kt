@@ -30,4 +30,18 @@ class RegistryDocTest {
         assertEquals("Hi", chats[0].title)
         assertFalse(chats[0].archived)
     }
+
+    @Test fun adapterReadsChatBranchAndConfig() {
+        val doc = RegistryDoc()
+        doc.applyState(true, listOf(row("chats", "c1", mapOf(
+            "title" to "PR work",
+            "archived" to false,
+            "branch" to "feat/x",
+            "config" to JSONObject().put("harness", "claude-code").put("model", "claude-sonnet-5"),
+        )), row("chats", "c2", mapOf("title" to "No branch", "archived" to false))), 1)
+        val chats = RegistryAdapter(doc).chats()
+        assertEquals("feat/x", chats.first { it.id == "c1" }.branch)
+        assertEquals("claude-sonnet-5", chats.first { it.id == "c1" }.config?.model)
+        assertNull(chats.first { it.id == "c2" }.branch)
+    }
 }

@@ -20,7 +20,9 @@ import sh.zeron.android.data.AttachmentTransfer
 import sh.zeron.android.data.FolderListing
 import sh.zeron.android.data.HarnessCatalog
 import sh.zeron.android.data.HarnessInfo
+import sh.zeron.android.data.InputAnswer
 import sh.zeron.android.data.ModelInfo
+import sh.zeron.android.data.Part
 import sh.zeron.android.data.RepoRef
 import sh.zeron.android.data.SessionAdapter
 import sh.zeron.android.data.SpaceRow
@@ -94,6 +96,33 @@ class AppViewModel(
      */
     private val _harnessLocked = MutableStateFlow(false)
     val harnessLocked: StateFlow<Boolean> = _harnessLocked
+
+    /**
+     * Live per-harness model catalogs for the OPEN session (iOS ComposerView
+     * `.task(id: chat.id/harness)`): the host's own ListModels answer over the
+     * relay, static fallback when the host is dark.
+     */
+    private val _sessionCatalogs = MutableStateFlow<Map<String, List<ModelInfo>>>(emptyMap())
+    val sessionCatalogs: StateFlow<Map<String, List<ModelInfo>>> = _sessionCatalogs
+
+    /**
+     * The unresolved agent question to surface instead of the composer (iOS
+     * SessionStore.openInputRequest) — nil when nothing is waiting on input.
+     */
+    private val _openInputRequest = MutableStateFlow<Part.Input?>(null)
+    val openInputRequest: StateFlow<Part.Input?> = _openInputRequest
+
+    /** OS network path offline (iOS ConnectivityCenter.state == .offline). */
+    val offline = Connectivity.offline
+
+    /**
+     * Pre-send honesty (iOS chatDeliveryDegraded): a prompt sent right now
+     * would queue rather than deliver — the OS path is down, the chat2 room
+     * is down, or the host device's presence is dark. The composer caption
+     * owns the copy.
+     */
+    private val _deliveryDegraded = MutableStateFlow(false)
+    val deliveryDegraded: StateFlow<Boolean> = _deliveryDegraded
 
     /** Spaces to create sessions in (each is a folder on a desktop device). */
     val spaces = registry.spaces
@@ -182,9 +211,9 @@ class AppViewModel(
         }
         viewModelScope.launch {
             // Degradation inputs: OS path, host presence, room state.
-            Connectivity.offline.collect { deliveryTracker.recompute() }
-            registry.presence.collect { deliveryTracker.recompute() }
-            registry.connected.collect { deliveryTracker.recompute() }
+            Connectivity.offline.collect { deliveryTracker.recompute(); recomputeDeliveryDegraded() }
+            registry.presence.collect { deliveryTracker.recompute(); recomputeDeliveryDegraded() }
+            registry.connected.collect { deliveryTracker.recompute(); recomputeDeliveryDegraded() }
         }
     }
 
@@ -270,7 +299,6 @@ class AppViewModel(
 
     fun openChat(id: String) {
         _selectedChat.value = id
-        sessionChatId = id
         // iOS parity: a session's provider is set-once on the host (stamped on
         // the first run, never updated), so the harness is locked mid-session
         // while the model stays switchable within it — the static catalog
@@ -286,7 +314,27 @@ class AppViewModel(
         } else {
             _harnessLocked.value = false
         }
+        // Live model catalog for the open session (iOS ComposerView `.task(id:
+        // chat.id/harness)`): the host's own ListModels answer over the relay
+        // — static fallback when the host is dark. The relay is shared with
+        // the new-session flow; closeNewSession never races this load because
+        // createSession closes the new-session flow before openChat runs.
+        val hostDevice = chats.value.firstOrNull { it.id == id }?.deviceId
+        val sessionHarness = chatConfig?.harness
+        if (hostDevice != null && sessionHarness != null) {
+            viewModelScope.launch {
+                val relay = relayFor(hostDevice) ?: return@launch
+                val models = runCatching { relay.listModels(sessionHarness).getOrThrow() }.getOrNull()
+                    ?: return@launch
+                _sessionCatalogs.value = mapOf(sessionHarness to models)
+            }
+        }
+        // Tear down the previous session FIRST, then stamp this one: setting
+        // sessionChatId before closeSession let it null the NEW id (it saves
+        // the old one into closedChatId), so hostOnline()/setLive never saw
+        // the open session — host presence and live badges silently no-oped.
         closeSession()
+        sessionChatId = id
         _sessionStatus.value = SessionStatus.Connecting
         val doc = try { RealNativeLoroDoc() } catch (e: Throwable) {
             _sessionStatus.value = SessionStatus.Failed(e.message ?: "native doc failed")
@@ -314,10 +362,18 @@ class AppViewModel(
                 url = EdgeConfig.chat2WSUrl(id, token, config.deviceId),
                 checkpointUrl = EdgeConfig.chat2CheckpointUrl(id, token),
             )
-            launch { repo.transcript.collect { _transcript.value = it } }
+            launch {
+                repo.transcript.collect {
+                    _transcript.value = it
+                    _openInputRequest.value = it.openInputRequest
+                }
+            }
             launch { repo.transferProgress.collect { _transferProgress.value = it } }
             launch {
-                repo.connected.collect { on -> if (on) _sessionStatus.value = SessionStatus.Connected }
+                repo.connected.collect { on ->
+                    if (on) _sessionStatus.value = SessionStatus.Connected
+                    recomputeDeliveryDegraded()
+                }
             }
             launch {
                 repo.lastError.collect { e -> if (e != null) _sessionStatus.value = SessionStatus.Failed(e) }
@@ -349,6 +405,9 @@ class AppViewModel(
         sendStateJob = null
         _sendState.value = null
         _transferProgress.value = null
+        _sessionCatalogs.value = emptyMap()
+        _openInputRequest.value = null
+        recomputeDeliveryDegraded()
         // Fall back to the doc-derived truth for that chat's row badge.
         if (closedChatId != null) deliveryTracker.setLive(closedChatId, null)
         if (repo != null) viewModelScope.launch { repo.shutdown() } else doc?.close()
@@ -358,6 +417,7 @@ class AppViewModel(
         _selectedChat.value = null
         closeSession()
         _transcript.value = Transcript(emptyList())
+        _openInputRequest.value = null
         _sessionStatus.value = SessionStatus.Connecting
         _sending.value = false
     }
@@ -384,6 +444,17 @@ class AppViewModel(
                 delay(1_000)
             }
         }
+    }
+
+    /**
+     * iOS chatDeliveryDegraded: every chat is remote-hosted on the phone, so
+     * a send queues whenever the OS path is down, the chat2 room is down, or
+     * the host device's presence is dark.
+     */
+    private fun recomputeDeliveryDegraded() {
+        val repo = session
+        val roomUp = repo == null || repo.connected.value
+        _deliveryDegraded.value = Connectivity.offline.value || !roomUp || !hostOnline()
     }
 
     /** The open chat's host device is online while its presence beat is fresh. */
@@ -809,9 +880,12 @@ class AppViewModel(
         persistConfig(harness, model, reasoning)
     }
 
-    /** The composer's picker catalog for a harness: live (new-session host) when loaded. */
+    /** The composer's picker catalog for a harness: the OPEN session's live
+     *  catalog when loaded, else the new-session host's, else the static one. */
     private fun modelsFor(harness: String): List<ModelInfo> =
-        _newSessionCatalogs.value[harness] ?: HarnessCatalog.models(harness)
+        _sessionCatalogs.value[harness]
+            ?: _newSessionCatalogs.value[harness]
+            ?: HarnessCatalog.models(harness)
 
     /** The composer's effort picker (iOS TraitPickerSheet) — run-level only. */
     fun selectReasoning(level: String) {
@@ -855,6 +929,19 @@ class AppViewModel(
             } catch (e: Throwable) {
                 _sessionStatus.value = SessionStatus.Failed(e.message ?: "interrupt failed")
             }
+        }
+    }
+
+    /**
+     * Answer the agent's open question (iOS SessionStore.respondInput): one
+     * [InputAnswer] per question, queued as a durable command the host drains.
+     * The panel disappears once the host stamps the input part `resolved`.
+     */
+    fun answerInput(requestId: String, answers: List<InputAnswer>) {
+        val repo = session ?: return
+        viewModelScope.launch {
+            runCatching { repo.respondInput(requestId, answers) }
+                .onFailure { _sessionStatus.value = SessionStatus.Failed(it.message ?: "answer failed") }
         }
     }
 

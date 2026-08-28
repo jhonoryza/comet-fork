@@ -20,7 +20,9 @@ import sh.zeron.android.data.DeviceRow
 import sh.zeron.android.data.FolderListing
 import sh.zeron.android.data.HarnessCatalog
 import sh.zeron.android.data.HarnessInfo
+import sh.zeron.android.data.InputAnswer
 import sh.zeron.android.data.ModelInfo
+import sh.zeron.android.data.Part
 import sh.zeron.android.data.RepoRef
 import sh.zeron.android.data.SpaceRow
 import sh.zeron.android.data.StagedAttachment
@@ -30,6 +32,7 @@ import sh.zeron.android.sync.SendState
 import sh.zeron.android.ui.session.Composer
 import sh.zeron.android.ui.session.ComposerMode
 import sh.zeron.android.ui.session.ComposerState
+import sh.zeron.android.ui.session.InputRequestPanel
 import sh.zeron.android.ui.session.SessionScreen
 import sh.zeron.android.ui.transcript.TranscriptView
 import sh.zeron.android.ui.theme.ZeronColors
@@ -56,6 +59,14 @@ fun AppRoot(
     harnessLocked: Boolean = false,
     onSelectModel: (String, String) -> Unit = { _, _ -> },
     onSelectReasoning: (String) -> Unit = {},
+    /** Live model catalogs for the open session (host ListModels). */
+    sessionCatalogs: Map<String, List<ModelInfo>> = emptyMap(),
+    /** The unresolved agent question — replaces the composer until answered. */
+    openInputRequest: Part.Input? = null,
+    onAnswerInput: (String, List<InputAnswer>) -> Unit = { _, _ -> },
+    /** Pre-send honesty caption (iOS chatDeliveryDegraded). */
+    offline: Boolean = false,
+    deliveryDegraded: Boolean = false,
     newSessionOpen: Boolean = false,
     spaces: List<SpaceRow> = emptyList(),
     devices: List<DeviceRow> = emptyList(),
@@ -166,20 +177,34 @@ fun AppRoot(
                 )
             },
             composer = {
-                Composer(
-                    state = ComposerState(
-                        mode = if (sending) ComposerMode.Sending else ComposerMode.Draft,
-                        canSend = !sending,
-                        running = running,
-                    ),
-                    onSend = { text, attachments -> onSend(text, attachments) },
-                    onSteer = { text -> onSend(text, emptyList()) },
-                    onStop = onStop,
-                    modelSelection = modelSelection,
-                    harnessLocked = harnessLocked,
-                    onSelectModel = onSelectModel,
-                    onSelectReasoning = onSelectReasoning,
-                )
+                // The agent asked a question (iOS SessionView): the panel
+                // replaces the composer until the host stamps it resolved.
+                val request = openInputRequest
+                if (request != null) {
+                    InputRequestPanel(
+                        questions = request.questions,
+                        onAnswer = { answers -> onAnswerInput(request.id, answers) },
+                    )
+                } else {
+                    Composer(
+                        state = ComposerState(
+                            mode = if (sending) ComposerMode.Sending else ComposerMode.Draft,
+                            canSend = !sending,
+                            running = running,
+                        ),
+                        onSend = { text, attachments -> onSend(text, attachments) },
+                        onSteer = { text -> onSend(text, emptyList()) },
+                        onStop = onStop,
+                        modelSelection = modelSelection,
+                        harnessLocked = harnessLocked,
+                        catalogs = sessionCatalogs,
+                        onSelectModel = onSelectModel,
+                        onSelectReasoning = onSelectReasoning,
+                        branch = chat?.branch,
+                        offline = offline,
+                        deliveryDegraded = deliveryDegraded,
+                    )
+                }
             },
         )
         return

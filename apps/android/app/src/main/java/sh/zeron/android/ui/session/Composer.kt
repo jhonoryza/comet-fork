@@ -22,6 +22,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +36,8 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import sh.zeron.android.R
 import sh.zeron.android.data.HarnessCatalog
 import sh.zeron.android.data.HarnessInfo
+import sh.zeron.android.data.InputAnswer
+import sh.zeron.android.data.InputQuestion
 import sh.zeron.android.data.ModelInfo
 import sh.zeron.android.data.StagedAttachment
 import sh.zeron.android.data.stageAttachment
@@ -99,6 +105,12 @@ fun Composer(
     catalogs: Map<String, List<ModelInfo>> = emptyMap(),
     onSelectModel: (String, String) -> Unit = { _, _ -> },
     onSelectReasoning: (String) -> Unit = {},
+    /** Base ref the session is pinned to (iOS BranchContextChip). */
+    branch: String? = null,
+    /** OS path offline (iOS ConnectivityCenter.state == .offline). */
+    offline: Boolean = false,
+    /** Pre-send honesty: a send right now would queue (iOS chatDeliveryDegraded). */
+    deliveryDegraded: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
@@ -166,13 +178,29 @@ fun Composer(
             .imePadding(),
     ) {
         HorizontalDivider(color = ZeronColors.divider)
+        // Pre-send honesty (composer.rs degraded notice, iOS ComposerView):
+        // one quiet caption line — the send still works, it just queues.
+        if (deliveryDegraded) {
+            Text(
+                stringResource(
+                    if (offline) R.string.composer_offline_notice
+                    else R.string.composer_degraded_notice
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = ZeronColors.textFaint,
+                modifier = Modifier.padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.xs),
+            )
+        }
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = ZeronSpacing.sm),
             horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.xs),
         ) {
-            // iOS ComposerChip split: model chip | trait (effort) chip.
+            // iOS ComposerView chips: branch context | model | trait (effort).
+            if (!branch.isNullOrEmpty()) {
+                BranchChip(branch)
+            }
             ModelPickerRow(
                 label = HarnessCatalog.modelLabel(modelSelection.harness, modelSelection.model),
                 onClick = { showModelPicker = true },
@@ -332,6 +360,37 @@ private fun AttachmentStrip(
                 }
             }
         }
+    }
+}
+
+/**
+ * The session's pinned base ref (iOS BranchContextChip) — where the session
+ * runs on the host. Read-only context, not a picker.
+ */
+@Composable
+private fun BranchChip(branch: String) {
+    Row(
+        Modifier
+            .padding(vertical = ZeronSpacing.xs)
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(ZeronColors.surfaceRaised)
+            .padding(horizontal = ZeronSpacing.sm, vertical = ZeronSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.xs),
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_git_branch),
+            contentDescription = null,
+            tint = ZeronColors.textFaint,
+            modifier = Modifier.size(12.dp),
+        )
+        Text(
+            branch,
+            style = MaterialTheme.typography.labelMedium,
+            color = ZeronColors.textMuted,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -586,73 +645,150 @@ private fun SendButton(
 }
 
 /**
- * The agent asked a question with fixed choices.
- *
- * Previously inert: the options carried no click handler, so `selected` could
- * never leave null, and Submit/Cancel were bare Text — `onAnswer`/`onCancel`
- * were never called.
+ * The agent asked a question with fixed choices (iOS QuestionPanel): one
+ * paged question at a time, radio (single) or checkbox (multi) options plus
+ * a typed-answer fallback, Back/Next/Submit. Submitting answers every
+ * question — picked labels, or the typed text when one was entered.
  */
 @Composable
 fun InputRequestPanel(
-    question: String,
-    options: List<String>,
-    onAnswer: (String) -> Unit,
-    onCancel: () -> Unit,
+    questions: List<InputQuestion>,
+    onAnswer: (List<InputAnswer>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    if (questions.isEmpty()) return
+    // Picked/typed maps aren't saveable; they reset on rotation like iOS @State.
+    var page by rememberSaveable { mutableStateOf(0) }
+    var picked by remember { mutableStateOf<Map<String, Set<String>>>(emptyMap()) }
+    var typed by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val question = questions[page.coerceAtMost(questions.size - 1)]
+    val isPicked = picked[question.id].orEmpty()
+    val typedText = typed[question.id].orEmpty()
+    val canAdvance = typedText.isNotBlank() || isPicked.isNotEmpty()
+
     Column(
         modifier
             .fillMaxWidth()
-            .padding(ZeronSpacing.md)
+            .padding(horizontal = ZeronSpacing.md, vertical = ZeronSpacing.sm)
             .clip(MaterialTheme.shapes.medium)
             .background(ZeronColors.surfaceRaised)
             .padding(ZeronSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
     ) {
-        Text(question, style = MaterialTheme.typography.bodyLarge, color = ZeronColors.text)
-        options.forEach { option ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                question.header.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = ZeronColors.textFaint,
+                modifier = Modifier.weight(1f),
+            )
+            if (questions.size > 1) {
+                Text(
+                    "${page + 1}/${questions.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ZeronColors.textFaint,
+                )
+            }
+        }
+        Text(question.question, style = MaterialTheme.typography.bodyLarge, color = ZeronColors.text)
+        if (question.multiSelect) {
+            Text(
+                stringResource(R.string.input_request_multi_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = ZeronColors.textFaint,
+            )
+        }
+        question.options.forEach { option ->
+            val selected = option in isPicked
             Row(
                 Modifier
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.small)
                     .selectable(
-                        selected = selected == option,
-                        role = Role.RadioButton,
-                        onClick = { selected = option },
+                        selected = selected,
+                        role = if (question.multiSelect) Role.Checkbox else Role.RadioButton,
+                        onClick = {
+                            // Picking an option clears any typed answer (iOS pick()).
+                            typed = typed - question.id
+                            picked = if (question.multiSelect) {
+                                val next = if (selected) isPicked - option else isPicked + option
+                                picked + (question.id to next)
+                            } else {
+                                picked + (question.id to setOf(option))
+                            }
+                        },
                     )
                     .padding(vertical = ZeronSpacing.xs, horizontal = ZeronSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
             ) {
-                RadioButton(
-                    selected = selected == option,
-                    onClick = null, // the whole row is the target
-                    colors = RadioButtonDefaults.colors(
-                        selectedColor = ZeronColors.accent,
-                        unselectedColor = ZeronColors.textFaint,
-                    ),
-                )
+                if (question.multiSelect) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = null, // the whole row is the target
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = ZeronColors.accent,
+                            uncheckedColor = ZeronColors.textFaint,
+                        ),
+                    )
+                } else {
+                    RadioButton(
+                        selected = selected,
+                        onClick = null, // the whole row is the target
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = ZeronColors.accent,
+                            unselectedColor = ZeronColors.textFaint,
+                        ),
+                    )
+                }
                 Text(
                     option,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (selected == option) ZeronColors.text else ZeronColors.textMuted,
+                    color = if (selected) ZeronColors.text else ZeronColors.textMuted,
                 )
             }
         }
+        // "Or type your own answer" — the typed text wins over the picks.
+        TextField(
+            value = typedText,
+            onValueChange = { typed = typed + (question.id to it) },
+            placeholder = {
+                Text(stringResource(R.string.input_request_typed), color = ZeronColors.textFaint)
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ZeronColors.text),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = ZeronColors.surface,
+                unfocusedContainerColor = ZeronColors.surface,
+                focusedIndicatorColor = ZeronColors.accent,
+                unfocusedIndicatorColor = ZeronColors.divider,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm, Alignment.End),
         ) {
-            TextButton(onClick = onCancel) {
-                Text(
-                    stringResource(R.string.input_request_cancel),
-                    color = ZeronColors.textMuted,
-                )
+            if (page > 0) {
+                TextButton(onClick = { page -= 1 }) {
+                    Text(stringResource(R.string.input_request_back), color = ZeronColors.textMuted)
+                }
             }
             Button(
-                onClick = { selected?.let(onAnswer) },
-                enabled = selected != null,
+                onClick = {
+                    if (page < questions.size - 1) {
+                        page += 1
+                    } else {
+                        onAnswer(questions.map { q ->
+                            val labels = typed[q.id]?.takeIf { it.isNotBlank() }
+                                ?.let { listOf(it) }
+                                ?: picked[q.id]?.toList()
+                                ?: emptyList()
+                            InputAnswer(q.id, labels)
+                        })
+                    }
+                },
+                enabled = canAdvance,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ZeronColors.text,
                     contentColor = ZeronColors.bg,
@@ -660,7 +796,12 @@ fun InputRequestPanel(
                     disabledContentColor = ZeronColors.textFaint,
                 ),
             ) {
-                Text(stringResource(R.string.input_request_submit))
+                Text(
+                    stringResource(
+                        if (page < questions.size - 1) R.string.input_request_next
+                        else R.string.input_request_submit
+                    )
+                )
             }
         }
     }
