@@ -283,7 +283,9 @@ class DeviceRelayClient(
         pending.clear()
     }
 
-    private fun sendEcho() {
+    // Suspend: every call site is already a coroutine (the flow collector's
+    // onEach action and the keepalive launch).
+    private suspend fun sendEcho() {
         ws.send(WsMessage.Binary(encodeFrame(ECHO_HEADER, ByteArray(0))))
     }
 

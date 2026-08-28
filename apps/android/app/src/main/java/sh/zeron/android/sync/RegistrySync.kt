@@ -210,7 +210,7 @@ class RegistrySync(
      * Dedupes on (device, path) like the desktop palette.
      */
     fun createSpace(spaceId: String, deviceId: String, path: String, gitDetected: Boolean) {
-        if (doc.overlayRows("spaces").any { it.deviceId == deviceId && it.field("path") == path }) {
+        if (doc.overlayRows("spaces").any { it.field("deviceId") == deviceId && it.field("path") == path }) {
             return
         }
         val now = System.currentTimeMillis()
@@ -231,7 +231,7 @@ class RegistrySync(
         doc.overlayRow("chats", chatId)?.fields?.optJSONObject("config")
 
     /** Push every unacked batch (server re-apply is idempotent by HLC compare). */
-    private fun flushPending() {
+    private suspend fun flushPending() {
         if (!_connected.value) return
         for (batch in doc.takePushable()) {
             val ops = JSONArray()
