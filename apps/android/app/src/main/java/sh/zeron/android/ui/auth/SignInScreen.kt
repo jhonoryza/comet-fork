@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import sh.zeron.android.R
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.theme.ZeronSpacing

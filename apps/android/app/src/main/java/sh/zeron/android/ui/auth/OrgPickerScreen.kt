@@ -51,6 +51,7 @@ fun OrgPickerScreen(orgs: List<AuthOrg>, onSelect: (AuthOrg) -> Unit) {
 
 @Composable
 private fun Row(org: AuthOrg, onSelect: (AuthOrg) -> Unit) {
+    val description = stringResource(R.string.org_picker_select, org.name)
     Column(
         Modifier
             .fillMaxWidth()
@@ -58,7 +59,7 @@ private fun Row(org: AuthOrg, onSelect: (AuthOrg) -> Unit) {
             .background(ZeronColors.surface)
             .clickable { onSelect(org) }
             .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.md)
-            .semantics { contentDescription = stringResource(R.string.org_picker_select, org.name) },
+            .semantics { contentDescription = description },
     ) {
         Text(org.name, style = MaterialTheme.typography.bodyLarge, color = ZeronColors.text)
         Text(org.organizationId, style = MaterialTheme.typography.labelSmall, color = ZeronColors.textFaint)
