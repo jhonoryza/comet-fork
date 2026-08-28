@@ -1,6 +1,7 @@
 package sh.zeron.android.ui.transcript
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,11 +42,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
 import sh.zeron.android.R
+import sh.zeron.android.data.AttachmentImageCache
 import sh.zeron.android.data.MessageRole
 import sh.zeron.android.data.Part
 import sh.zeron.android.data.Transcript
 import sh.zeron.android.data.TranscriptMessage
+import sh.zeron.android.data.UserImageAttachment
+import sh.zeron.android.data.parseUserMessageImages
 import sh.zeron.android.ui.theme.MonoStyle
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.theme.ZeronSpacing
@@ -59,6 +68,8 @@ fun TranscriptView(
     transcript: Transcript,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(ZeronSpacing.lg),
+    attachmentDeviceId: String? = null,
+    onLoadAttachment: (String, String) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
 
@@ -84,12 +95,18 @@ fun TranscriptView(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(ZeronSpacing.lg),
     ) {
-        items(transcript.messages, key = { it.id }) { message -> MessageBlock(message) }
+        items(transcript.messages, key = { it.id }) {
+            MessageBlock(it, attachmentDeviceId, onLoadAttachment)
+        }
     }
 }
 
 @Composable
-private fun MessageBlock(message: TranscriptMessage) {
+private fun MessageBlock(
+    message: TranscriptMessage,
+    attachmentDeviceId: String?,
+    onLoadAttachment: (String, String) -> Unit,
+) {
     if (message.role == MessageRole.User) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
             Box(Modifier.fillMaxWidth(0.85f), contentAlignment = Alignment.CenterEnd) {
@@ -100,7 +117,15 @@ private fun MessageBlock(message: TranscriptMessage) {
                         .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.md),
                     verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
                 ) {
-                    message.parts.forEach { PartView(it) }
+                    message.parts.forEach { part ->
+                        // User text rides the attachment-ref trailer (iOS
+                        // parseUserMessageImages) — split it and render thumbs.
+                        if (part is Part.Text && attachmentDeviceId != null) {
+                            UserTextWithAttachments(part.text, attachmentDeviceId, onLoadAttachment)
+                        } else {
+                            PartView(part)
+                        }
+                    }
                 }
             }
         }
@@ -111,6 +136,117 @@ private fun MessageBlock(message: TranscriptMessage) {
         verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
     ) {
         message.parts.forEach { PartView(it) }
+    }
+}
+
+/** User text + any parsed attachment thumbnails (112×80, right-aligned strip). */
+@Composable
+private fun UserTextWithAttachments(
+    content: String,
+    deviceId: String,
+    onLoadAttachment: (String, String) -> Unit,
+) {
+    val parsed = remember(content) { parseUserMessageImages(content) }
+    if (parsed.attachments.isEmpty()) {
+        MarkdownText(content)
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm)) {
+        if (parsed.text.isNotEmpty()) MarkdownText(parsed.text)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm, Alignment.End),
+        ) {
+            parsed.attachments.forEach { att ->
+                AttachmentThumb(deviceId, att, onLoadAttachment)
+            }
+        }
+    }
+}
+
+/** One transcript thumbnail: loading spinner → loaded image → tap for full view. */
+@Composable
+private fun AttachmentThumb(
+    deviceId: String,
+    att: UserImageAttachment,
+    onLoadAttachment: (String, String) -> Unit,
+) {
+    var preview by rememberSaveable(att.path) { mutableStateOf(false) }
+    val snapshot = AttachmentImageCache.snapshot(deviceId, att.path)
+    LaunchedEffect(deviceId, att.path) {
+        if (snapshot !is AttachmentImageCache.Snapshot.Loaded) {
+            onLoadAttachment(deviceId, att.path)
+        }
+    }
+    Box(
+        Modifier
+            .size(width = 112.dp, height = 80.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(ZeronColors.surface)
+            .border(1.dp, ZeronColors.border, RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        when (snapshot) {
+            is AttachmentImageCache.Snapshot.Loaded -> {
+                Image(
+                    bitmap = snapshot.bitmap.asImageBitmap(),
+                    contentDescription = att.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { preview = true },
+                )
+            }
+            is AttachmentImageCache.Snapshot.Error -> {
+                Text(
+                    stringResource(R.string.attachment_error),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ZeronColors.textFaint,
+                    modifier = Modifier.clickable { onLoadAttachment(deviceId, att.path) },
+                )
+            }
+            else -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = ZeronColors.textFaint,
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+    }
+    if (preview) {
+        val loaded = snapshot as? AttachmentImageCache.Snapshot.Loaded
+        if (loaded != null) {
+            Dialog(onDismissRequest = { preview = false }) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.9f))
+                        .clickable { preview = false },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        Modifier.padding(ZeronSpacing.lg),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
+                    ) {
+                        Image(
+                            bitmap = loaded.bitmap.asImageBitmap(),
+                            contentDescription = loaded.name,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            loaded.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ZeronColors.textMuted,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

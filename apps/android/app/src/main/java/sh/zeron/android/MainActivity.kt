@@ -1,6 +1,10 @@
 package sh.zeron.android
 
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,6 +22,7 @@ import sh.zeron.android.config.EdgeConfig
 import sh.zeron.android.config.WorkOsAuth
 import sh.zeron.android.data.PersistentDeviceIdStore
 import sh.zeron.android.data.SecureTokenStore
+import sh.zeron.android.sync.Connectivity
 import sh.zeron.android.sync.OkHttpTransport
 import sh.zeron.android.sync.OkHttpWebSocket
 import sh.zeron.android.sync.RegistrySync
@@ -45,20 +50,60 @@ class MainActivity : ComponentActivity() {
 
     /** True while the AuthKit tab is in front, so onResume can detect a dismiss. */
     private var awaitingCallback = false
+    /** Monitors the OS path so a network return re-dials every socket (OnlineBus). */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            Connectivity.setPathOffline(false)
+            viewModel.onNetworkRestored()
+        }
+
+        override fun onLost(network: Network) {
+            Connectivity.setPathOffline(true)
+        }
+
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            val hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            Connectivity.setPathOffline(!hasInternet)
+            if (hasInternet) viewModel.onNetworkRestored()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NativeLoader.loadOnce()
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        runCatching { connectivityManager.registerDefaultNetworkCallback(networkCallback) }
         setContent {
             ZeronTheme {
                 val state by viewModel.state.collectAsState()
                 val chats by viewModel.chats.collectAsState()
                 val selected by viewModel.selectedChat.collectAsState()
+                val newSessionOpen by viewModel.newSessionOpen.collectAsState()
+                val spaces by viewModel.spaces.collectAsState()
+                val devices by viewModel.devices.collectAsState()
+                val presence by viewModel.presence.collectAsState()
+                val refs by viewModel.newSessionRefs.collectAsState()
+                val refsLoading by viewModel.newSessionRefsLoading.collectAsState()
+                val harnesses by viewModel.newSessionHarnesses.collectAsState()
+                val catalogs by viewModel.newSessionCatalogs.collectAsState()
+                val newSpaceOpen by viewModel.newSpaceOpen.collectAsState()
+                val folderListing by viewModel.folderListing.collectAsState()
+                val folderLoading by viewModel.folderLoading.collectAsState()
+                val folderError by viewModel.folderError.collectAsState()
+                val spaceCreating by viewModel.spaceCreating.collectAsState()
+                val folderCurrentIsRepo by viewModel.folderCurrentIsRepo.collectAsState()
+                val folderDeviceId by viewModel.folderDeviceId.collectAsState()
                 val transcript by viewModel.transcript.collectAsState()
                 val registryConnected by viewModel.registryConnected.collectAsState()
                 val registryError by viewModel.registryError.collectAsState()
                 val sessionStatus by viewModel.sessionStatus.collectAsState()
                 val sending by viewModel.sending.collectAsState()
+                val sendState by viewModel.sendState.collectAsState()
+                val transferProgress by viewModel.transferProgress.collectAsState()
+                val modelSelection by viewModel.modelSelection.collectAsState()
+                val pickerLocked by viewModel.pickerLocked.collectAsState()
+                val harnessLocked by viewModel.harnessLocked.collectAsState()
+                val deliveryBadges by viewModel.deliveryBadges.collectAsState()
                 AppRoot(
                     state = state,
                     onLogIn = { launchAuthKit() },
@@ -71,9 +116,56 @@ class MainActivity : ComponentActivity() {
                     transcript = transcript,
                     sessionStatus = sessionStatus,
                     sending = sending,
+                    sendState = sendState,
+                    transferProgress = transferProgress,
+                    onRetryDelivery = { viewModel.retryDelivery() },
+                    modelSelection = modelSelection,
+                    pickerLocked = pickerLocked,
+                    harnessLocked = harnessLocked,
+                    onSelectModel = { harness, model -> viewModel.selectModel(harness, model) },
+                    onSelectReasoning = { level -> viewModel.selectReasoning(level) },
+                    newSessionOpen = newSessionOpen,
+                    spaces = spaces,
+                    devices = devices,
+                    presence = presence,
+                    refs = refs ?: emptyList(),
+                    refsLoading = refsLoading,
+                    harnesses = harnesses,
+                    catalogs = catalogs,
+                    onNewSession = { viewModel.openNewSession() },
+                    onCloseNewSession = { viewModel.closeNewSession() },
+                    onLoadRefs = { viewModel.loadRefs(it) },
+                    onLoadLiveCatalog = { viewModel.loadLiveCatalog(it) },
+                    onSwitchRef = { space, ref, done -> viewModel.switchRef(space, ref, done) },
+                    onCreateSession = { spaceId, text, attachments, branch, cwd, worktree ->
+                        viewModel.createSession(spaceId, text, attachments, branch, cwd, worktree)
+                    },
+                    newSpaceOpen = newSpaceOpen,
+                    folderListing = folderListing,
+                    folderLoading = folderLoading,
+                    folderError = folderError,
+                    spaceCreating = spaceCreating,
+                    folderCurrentIsRepo = folderCurrentIsRepo,
+                    folderDeviceId = folderDeviceId,
+                    onOpenNewSpace = { viewModel.openNewSpace() },
+                    onCloseNewSpace = { viewModel.closeNewSpace() },
+                    onPickFolderDevice = { deviceId -> viewModel.pickFolderDevice(deviceId) },
+                    onNavigateFolder = { path, isRepo ->
+                        val deviceId = viewModel.folderDeviceId.value ?: return@onNavigateFolder
+                        viewModel.loadFolders(deviceId, path, isRepo)
+                    },
+                    onCreateSpace = { deviceId, path, isRepo, done ->
+                        viewModel.createSpace(deviceId, path, isRepo, done)
+                    },
                     onBack = { viewModel.closeChat() },
-                    onSend = { viewModel.sendPrompt(it) },
+                    onSend = { text, attachments ->
+                        if (attachments.isEmpty()) viewModel.sendPrompt(text)
+                        else viewModel.sendPromptWithAttachments(text, attachments)
+                    },
                     onStop = { viewModel.interrupt() },
+                    onLoadAttachment = { deviceId, path -> viewModel.loadAttachmentImage(deviceId, path) },
+                    attachmentDeviceId = selected?.let { id -> chats.firstOrNull { it.id == id }?.deviceId },
+                    deliveryBadges = deliveryBadges,
                     onRetry = { viewModel.retryRegistry() },
                     onSignOut = { viewModel.signOut() },
                 )
@@ -110,5 +202,11 @@ class MainActivity : ComponentActivity() {
             viewModel.signInAborted()
         }
         viewModel.onForeground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Backgrounding: persist the open session's snapshot immediately.
+        viewModel.flushToDisk()
     }
 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import sh.zeron.android.R
 import sh.zeron.android.data.ChatRow
+import sh.zeron.android.sync.SendState
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.theme.ZeronSpacing
 
@@ -51,12 +52,20 @@ import sh.zeron.android.ui.theme.ZeronSpacing
 @Composable
 fun WorkspaceScreen(
     chats: List<ChatRow>,
+    spaces: List<sh.zeron.android.data.SpaceRow> = emptyList(),
     connected: Boolean,
     error: String?,
     onOpen: (String) -> Unit,
+    onNewSession: () -> Unit,
+    onNewSpace: () -> Unit = {},
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    /** Delivery badges per chat (iOS HomeView sendBadge: Failed > Queued). */
+    badges: Map<String, SendState?> = emptyMap(),
 ) {
+    // iOS HomeView "+": no spaces yet → create one first; otherwise start a
+    // session (the Android picker chooses the space).
+    val primaryAction = if (spaces.isEmpty()) onNewSpace else onNewSession
     Scaffold(
         containerColor = ZeronColors.bg,
         topBar = {
@@ -69,7 +78,17 @@ fun WorkspaceScreen(
                             color = ZeronColors.text,
                         )
                     },
-                    actions = { OverflowMenu(onSignOut) },
+                    actions = {
+                        // iOS HomeView "+": no spaces yet → new space; else session.
+                        IconButton(onClick = primaryAction) {
+                            Icon(
+                                painterResource(R.drawable.ic_add),
+                                contentDescription = stringResource(R.string.workspace_new_session),
+                                tint = ZeronColors.text,
+                            )
+                        }
+                        OverflowMenu(onSignOut)
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = ZeronColors.surface,
                         titleContentColor = ZeronColors.text,
@@ -108,7 +127,7 @@ fun WorkspaceScreen(
                 body = stringResource(R.string.workspace_empty_body),
             )
 
-            else -> SessionList(chats, padding, onOpen)
+            else -> SessionList(chats, padding, onOpen, badges)
         }
     }
 }
@@ -154,6 +173,7 @@ private fun SessionList(
     chats: List<ChatRow>,
     padding: PaddingValues,
     onOpen: (String) -> Unit,
+    badges: Map<String, SendState?> = emptyMap(),
 ) {
     val (active, archived) = remember(chats) { chats.partition { !it.archived } }
     LazyColumn(
@@ -168,11 +188,11 @@ private fun SessionList(
     ) {
         if (active.isNotEmpty()) {
             item(key = "header:active") { SectionLabel(stringResource(R.string.workspace_section_active)) }
-            items(active, key = { it.id }) { SessionRow(it, onOpen) }
+            items(active, key = { it.id }) { SessionRow(it, onOpen, badges[it.id]) }
         }
         if (archived.isNotEmpty()) {
             item(key = "header:archived") { SectionLabel(stringResource(R.string.workspace_section_archived)) }
-            items(archived, key = { it.id }) { SessionRow(it, onOpen) }
+            items(archived, key = { it.id }) { SessionRow(it, onOpen, badges[it.id]) }
         }
     }
 }
@@ -188,7 +208,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun SessionRow(chat: ChatRow, onOpen: (String) -> Unit) {
+private fun SessionRow(chat: ChatRow, onOpen: (String) -> Unit, badge: SendState? = null) {
     val label = chat.title?.takeIf { it.isNotBlank() } ?: chat.id
     val description = stringResource(R.string.workspace_open_session, label)
     Row(
@@ -209,13 +229,20 @@ private fun SessionRow(chat: ChatRow, onOpen: (String) -> Unit) {
                 .background(if (chat.archived) ZeronColors.textFaint else ZeronColors.completed)
         )
         Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = ZeronColors.text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ZeronColors.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // iOS HomeView sendBadge (shell.rs precedence: Failed > Queued):
+                // a muted dot + word in the row's status corner, no badge for
+                // healthy in-flight sends.
+                if (badge != null) SendBadge(badge)
+            }
             if (chat.archived) {
                 Text(
                     stringResource(R.string.workspace_archived_label),
@@ -229,6 +256,28 @@ private fun SessionRow(chat: ChatRow, onOpen: (String) -> Unit) {
             contentDescription = null,
             tint = ZeronColors.textFaint,
             modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+private fun SendBadge(state: SendState) {
+    val (label, color) = when (state) {
+        SendState.Failed -> stringResource(R.string.workspace_send_failed) to ZeronColors.danger
+        SendState.Queued -> stringResource(R.string.workspace_send_queued) to ZeronColors.warning
+        SendState.Sending -> return // healthy in-flight: no badge (iOS parity)
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.padding(start = ZeronSpacing.sm),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(color))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
         )
     }
 }

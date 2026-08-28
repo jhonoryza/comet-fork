@@ -27,7 +27,7 @@ class UniFfiLoroDoc(private val handle: Any? = null) : LoroDoc {
     override fun close() {}
 }
 
-class FakeLoroDoc(var json: String = "{}") : LoroDoc {
+open class FakeLoroDoc(var json: String = "{}") : LoroDoc {
     var closed = false
     override suspend fun importBytes(bytes: ByteArray) { check(!closed) }
     override suspend fun exportSnapshot(): ByteArray = json.toByteArray()

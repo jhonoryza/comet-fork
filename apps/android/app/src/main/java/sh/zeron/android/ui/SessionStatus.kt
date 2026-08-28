@@ -7,8 +7,8 @@ import sh.zeron.android.R
  * What the session header is allowed to say.
  *
  * The sync layer's raw strings ("ws_failed", "native doc failed: …", "history
- * compacted — older messages need checkpoint fetch (not implemented)") used to
- * be rendered verbatim in the app bar. They now land in [Failed.detail], which
+ * compacted — older messages need checkpoint fetch") used to be rendered
+ * verbatim in the app bar. They now land in [Failed.detail], which
  * the screen can reveal on demand, while the chip shows a short human label.
  */
 sealed interface SessionStatus {
