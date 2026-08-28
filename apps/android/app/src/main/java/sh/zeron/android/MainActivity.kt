@@ -48,11 +48,13 @@ class MainActivity : ComponentActivity() {
                 val chats by viewModel.chats.collectAsState()
                 val selected by viewModel.selectedChat.collectAsState()
                 val transcript by viewModel.transcript.collectAsState()
+                val registryConnected by viewModel.registryConnected.collectAsState()
                 AppRoot(
                     state = state,
                     onSignIn = { viewModel.signIn() },
                     onOrgSelect = { viewModel.selectOrg(it) },
                     chats = chats,
+                    registryConnected = registryConnected,
                     onOpenChat = { viewModel.openChat(it) },
                     selectedChat = selected,
                     transcript = transcript,

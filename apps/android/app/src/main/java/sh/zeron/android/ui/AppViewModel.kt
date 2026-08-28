@@ -30,6 +30,9 @@ class AppViewModel(
     private val _selectedChat = MutableStateFlow<String?>(null)
     val selectedChat: StateFlow<String?> = _selectedChat
 
+    /** False when the registry room isn't joined yet (no chats to show). */
+    val registryConnected = registry.connected
+
     /** Live session doc for the open chat; null while in workspace. */
     private var openDoc: LoroDoc? = null
     private val _transcript = MutableStateFlow(Transcript(emptyList()))

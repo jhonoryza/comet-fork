@@ -26,6 +26,7 @@ fun AppRoot(
     onSignIn: () -> Unit,
     onOrgSelect: (AuthOrg) -> Unit,
     chats: List<ChatRow> = emptyList(),
+    registryConnected: Boolean = true,
     onOpenChat: (String) -> Unit = {},
     onArchiveChat: (String) -> Unit = {},
     selectedChat: String? = null,
@@ -46,7 +47,7 @@ fun AppRoot(
     when (state) {
         is AppState.SignedOut -> SignInScreen(onSignIn)
         is AppState.SelectingOrg -> OrgPickerScreen(state.orgs, onOrgSelect)
-        is AppState.Ready -> WorkspaceScreen(chats, onOpenChat, onArchiveChat)
+        is AppState.Ready -> WorkspaceScreen(chats, registryConnected, onOpenChat, onArchiveChat)
         is AppState.Fatal -> FatalScreen(state.message)
         else -> LoadingScreen()
     }
