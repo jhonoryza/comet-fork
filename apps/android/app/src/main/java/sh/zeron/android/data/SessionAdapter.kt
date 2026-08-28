@@ -13,7 +13,36 @@ sealed class Part {
     data class Error(val id: String, val message: String) : Part()
 }
 
-data class Transcript(val parts: List<Part>)
+/** Message author (schema.rs `MessageRole`). */
+enum class MessageRole {
+    User, Assistant, System;
+
+    companion object {
+        fun parse(raw: String?): MessageRole = when (raw?.lowercase()) {
+            "user" -> User
+            "system" -> System
+            else -> Assistant
+        }
+    }
+}
+
+/**
+ * One authored turn. Parts stay grouped under their message so the transcript
+ * can attribute them — rendering a flat part list made every row look the same
+ * regardless of who produced it.
+ */
+data class TranscriptMessage(
+    val id: String,
+    val role: MessageRole,
+    val parts: List<Part>,
+)
+
+data class Transcript(val messages: List<TranscriptMessage>) {
+    /** Flattened view, for counts and assertions that don't care about grouping. */
+    val parts: List<Part> get() = messages.flatMap { it.parts }
+
+    val isEmpty: Boolean get() = messages.isEmpty()
+}
 
 class SessionAdapter(private val doc: LoroDoc) {
     /**
@@ -25,15 +54,16 @@ class SessionAdapter(private val doc: LoroDoc) {
     suspend fun transcript(): Transcript {
         val json = doc.getDeepValueJson()
         if (json.isBlank() || json == "{}" || json == "null") return Transcript(emptyList())
-        if (json.isBlank() || json == "{}" || json == "null") return Transcript(emptyList())
-        val parts = mutableListOf<Part>()
+        val out = mutableListOf<TranscriptMessage>()
         try {
             val root = JSONObject(json)
             val messages = root.optJSONArray("messages") ?: JSONArray()
             for (i in 0 until messages.length()) {
                 val msg = messages.getJSONObject(i)
                 val msgId = msg.optString("id", "$i")
+                val role = MessageRole.parse(msg.optString("role").takeIf { it.isNotEmpty() })
                 val msgParts = msg.optJSONArray("parts") ?: JSONArray()
+                val parts = mutableListOf<Part>()
                 for (j in 0 until msgParts.length()) {
                     val p = msgParts.getJSONObject(j)
                     val kind = p.optString("kind")
@@ -44,19 +74,25 @@ class SessionAdapter(private val doc: LoroDoc) {
                         "reasoning" -> text?.let { parts += Part.Reasoning(partId, it) }
                         "tool" -> {
                             val call = p.optJSONObject("call")?.toString() ?: ""
-                            parts += Part.Tool(partId, p.optString("subagent_tail", call), p.optBoolean("isError", false), p.optString("output").ifBlank { null })
+                            parts += Part.Tool(
+                                partId,
+                                p.optString("subagent_tail", call),
+                                p.optBoolean("isError", false),
+                                p.optString("output").ifBlank { null },
+                            )
                         }
                         "input" -> parts += Part.Input(partId, p.optString("message", "Question"))
                         "error" -> parts += Part.Error(partId, p.optString("message", "Error"))
                         else -> text?.let { parts += Part.Text(partId, it) }
                     }
                 }
+                if (parts.isNotEmpty()) out += TranscriptMessage(msgId, role, parts)
             }
         } catch (e: Exception) {
             // Malformed doc: surface what we can, never crash the viewer.
-            if (parts.isEmpty()) return Transcript(emptyList())
+            if (out.isEmpty()) return Transcript(emptyList())
         }
-        return Transcript(parts)
+        return Transcript(out)
     }
 
     /// Durable command-ledger append (viewer-only write allowed by writer discipline).

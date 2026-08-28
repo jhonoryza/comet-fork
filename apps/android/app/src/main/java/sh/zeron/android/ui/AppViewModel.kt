@@ -42,8 +42,8 @@ class AppViewModel(
 
     private val _transcript = MutableStateFlow(Transcript(emptyList()))
     val transcript: StateFlow<Transcript> = _transcript
-    private val _sessionStatus = MutableStateFlow("connecting")
-    val sessionStatus: StateFlow<String> = _sessionStatus
+    private val _sessionStatus = MutableStateFlow<SessionStatus>(SessionStatus.Connecting)
+    val sessionStatus: StateFlow<SessionStatus> = _sessionStatus
     private val _sending = MutableStateFlow(false)
     val sending: StateFlow<Boolean> = _sending
 
@@ -54,14 +54,40 @@ class AppViewModel(
     /** CSRF state for the in-flight AuthKit round trip. */
     private var pendingState: String? = null
 
-    fun onForeground() { registry.kick() }
+    /**
+     * Back from the background. `RegistrySync.kick()` is a no-op, so a dropped
+     * room used to stay dropped until the user killed the app — rejoin here
+     * instead when we know we should be connected but aren't.
+     */
+    fun onForeground() {
+        if (_state.value is AppState.Ready && !registry.connected.value) retryRegistry()
+    }
+
+    /** Explicit "Try again" from the workspace's disconnected/error state. */
+    fun retryRegistry() {
+        val org = orgId ?: return
+        viewModelScope.launch {
+            runCatching { connectRegistry(org) }
+                .onFailure { _state.value = AppState.Fatal(it.message ?: "reconnect failed") }
+        }
+    }
+
+    private suspend fun connectRegistry(organizationId: String) {
+        val token = auth.accessToken()
+            ?: throw IllegalStateException("no access token")
+        registry.start(
+            cursor = null,
+            deviceId = config.deviceId,
+            url = EdgeConfig.registryWSUrl(organizationId, token, config.deviceId),
+        )
+    }
 
     fun openChat(id: String) {
         _selectedChat.value = id
         closeSession()
-        _sessionStatus.value = "connecting"
+        _sessionStatus.value = SessionStatus.Connecting
         val doc = try { RealNativeLoroDoc() } catch (e: Throwable) {
-            _sessionStatus.value = "native doc failed: ${e.message}"
+            _sessionStatus.value = SessionStatus.Failed(e.message ?: "native doc failed")
             return
         }
         openDoc = doc
@@ -72,7 +98,7 @@ class AppViewModel(
         viewModelScope.launch {
             val token = auth.accessToken()
             if (token == null) {
-                _sessionStatus.value = "not signed in"
+                _sessionStatus.value = SessionStatus.SignedOut
                 return@launch
             }
             repo.start(
@@ -82,14 +108,14 @@ class AppViewModel(
             )
             launch { repo.transcript.collect { _transcript.value = it } }
             launch {
-                repo.connected.collect { on -> if (on) _sessionStatus.value = "connected" }
+                repo.connected.collect { on -> if (on) _sessionStatus.value = SessionStatus.Connected }
             }
             launch {
-                repo.lastError.collect { e -> if (e != null) _sessionStatus.value = e }
+                repo.lastError.collect { e -> if (e != null) _sessionStatus.value = SessionStatus.Failed(e) }
             }
             launch {
                 repo.checkpointPending.collect { pending ->
-                    if (pending) _sessionStatus.value = "history compacted — older messages need checkpoint fetch (not implemented)"
+                    if (pending) _sessionStatus.value = SessionStatus.HistoryTrimmed
                 }
             }
             repo.refresh()
@@ -108,7 +134,8 @@ class AppViewModel(
         _selectedChat.value = null
         closeSession()
         _transcript.value = Transcript(emptyList())
-        _sessionStatus.value = "connecting"
+        _sessionStatus.value = SessionStatus.Connecting
+        _sending.value = false
     }
 
     fun sendPrompt(text: String) {
@@ -119,9 +146,21 @@ class AppViewModel(
             try {
                 repo.sendPrompt(text.trim())
             } catch (e: Throwable) {
-                _sessionStatus.value = "send failed: ${e.message}"
+                _sessionStatus.value = SessionStatus.Failed(e.message ?: "send failed")
             } finally {
                 _sending.value = false
+            }
+        }
+    }
+
+    /** Ask the host to abandon the running turn (chat2 `interrupt` command). */
+    fun interrupt() {
+        val repo = session ?: return
+        viewModelScope.launch {
+            try {
+                repo.interrupt()
+            } catch (e: Throwable) {
+                _sessionStatus.value = SessionStatus.Failed(e.message ?: "interrupt failed")
             }
         }
     }
@@ -172,14 +211,8 @@ class AppViewModel(
             _state.value = AppState.Connecting
             try {
                 auth.selectOrgAndRefresh(org.organizationId)
-                val token = auth.accessToken()
-                    ?: throw IllegalStateException("no access token after refresh")
                 orgId = org.organizationId
-                registry.start(
-                    cursor = null,
-                    deviceId = config.deviceId,
-                    url = EdgeConfig.registryWSUrl(org.organizationId, token, config.deviceId),
-                )
+                connectRegistry(org.organizationId)
                 _state.value = AppState.Ready
             } catch (e: Throwable) {
                 _state.value = AppState.Fatal(e.message ?: "org select failed")
@@ -187,11 +220,19 @@ class AppViewModel(
         }
     }
 
+    /** Leave the dead-end Fatal screen without needing to kill the app. */
+    fun dismissFatal() {
+        if (_state.value is AppState.Fatal) _state.value = AppState.SignedOut
+    }
+
     fun signOut() {
         viewModelScope.launch {
             registry.stop()
             auth.signOut()
             closeSession()
+            orgId = null
+            _selectedChat.value = null
+            _transcript.value = Transcript(emptyList())
             _state.value = AppState.SignedOut
         }
     }

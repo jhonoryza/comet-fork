@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     sending = sending,
                     onBack = { viewModel.closeChat() },
                     onSend = { viewModel.sendPrompt(it) },
+                    onStop = { viewModel.interrupt() },
                 )
             }
         }

@@ -3,45 +3,63 @@ package sh.zeron.android.ui.session
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.*
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import sh.zeron.android.R
 import sh.zeron.android.ui.theme.ZeronColors
+import sh.zeron.android.ui.theme.ZeronSpacing
 
-enum class ComposerMode { Draft, Sending, Steering, InputRequest, Disabled }
+enum class ComposerMode { Draft, Sending, Steering, Disabled }
 
 data class ComposerState(
-    val text: String = "",
     val mode: ComposerMode = ComposerMode.Draft,
     val canSend: Boolean = false,
-) {
-    val isEmpty: Boolean get() = text.isBlank()
-}
+)
 
 /**
  * Prompt composer — a rounded pill over the transcript, Send morphing to Stop
  * while a turn runs (the desktop/iOS Send→Steer→Stop shape).
+ *
+ * The draft is [rememberSaveable] so a rotation or a process death no longer
+ * throws away a half-typed message.
  */
 @Composable
 fun Composer(
@@ -49,9 +67,11 @@ fun Composer(
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onStop: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    var draft by remember(state.text) { mutableStateOf(state.text) }
-    val enabled = state.mode != ComposerMode.Disabled && state.mode != ComposerMode.Sending
+    var draft by rememberSaveable { mutableStateOf("") }
+    val sending = state.mode == ComposerMode.Sending
+    val enabled = state.mode != ComposerMode.Disabled && !sending
     val canSubmit = draft.isNotBlank() && state.canSend
 
     fun submit() {
@@ -60,117 +80,187 @@ fun Composer(
         draft = ""
     }
 
-    Row(
-        Modifier
+    Column(
+        modifier
             .fillMaxWidth()
             .background(ZeronColors.bg)
             .navigationBarsPadding()
-            .imePadding()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .imePadding(),
     ) {
-        TextField(
-            value = draft,
-            onValueChange = { draft = it },
-            enabled = enabled,
-            placeholder = { Text("Message", color = ZeronColors.textFaint) },
-            textStyle = MaterialTheme.typography.bodyLarge,
-            maxLines = 5,
-            shape = RoundedCornerShape(20.dp),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { submit() }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = ZeronColors.surface,
-                unfocusedContainerColor = ZeronColors.surface,
-                disabledContainerColor = ZeronColors.surface,
-                focusedTextColor = ZeronColors.text,
-                unfocusedTextColor = ZeronColors.text,
-                cursorColor = ZeronColors.accent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
+        HorizontalDivider(color = ZeronColors.divider)
+        Row(
+            Modifier.padding(
+                horizontal = ZeronSpacing.md,
+                vertical = ZeronSpacing.sm,
             ),
-            modifier = Modifier.weight(1f).semantics { contentDescription = "Message input" },
-        )
-        SendButton(
-            mode = state.mode,
-            enabled = canSubmit || state.mode == ComposerMode.Sending,
-            onClick = { if (state.mode == ComposerMode.Sending) onStop() else submit() },
-        )
-    }
-}
-
-@Composable
-private fun SendButton(mode: ComposerMode, enabled: Boolean, onClick: () -> Unit) {
-    val bg = if (enabled) ZeronColors.text else ZeronColors.surfaceRaised
-    val fg = if (enabled) ZeronColors.bg else ZeronColors.textFaint
-    Box(
-        Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(bg)
-            .semantics { contentDescription = if (mode == ComposerMode.Sending) "Stop" else "Send" },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (mode == ComposerMode.Sending) {
-            CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
-        } else {
-            androidx.compose.material3.IconButton(onClick = onClick, enabled = enabled) {
-                Text("↑", style = MaterialTheme.typography.titleMedium, color = fg)
-            }
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
+        ) {
+            BasicTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                enabled = enabled,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = ZeronColors.text),
+                cursorBrush = SolidColor(ZeronColors.accent),
+                maxLines = 5,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
+                decorationBox = { innerTextField ->
+                    Box(
+                        Modifier
+                            .clip(MaterialTheme.shapes.extraLarge)
+                            .background(ZeronColors.surface)
+                            .heightIn(min = 44.dp)
+                            .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.md),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (draft.isEmpty()) {
+                            Text(
+                                stringResource(R.string.composer_placeholder),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = ZeronColors.textFaint,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+            SendButton(
+                sending = sending,
+                enabled = canSubmit,
+                onSend = ::submit,
+                onStop = onStop,
+            )
         }
     }
 }
 
+/**
+ * One button, one touch target. The old version nested an IconButton inside a
+ * painted 48.dp Box (two overlapping targets), and drew a bare progress ring
+ * while sending — so "Stop" announced itself to TalkBack but could not be
+ * tapped at all.
+ */
+@Composable
+private fun SendButton(
+    sending: Boolean,
+    enabled: Boolean,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val active = sending || enabled
+    IconButton(
+        onClick = { if (sending) onStop() else onSend() },
+        enabled = active,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = if (active) ZeronColors.text else ZeronColors.surfaceRaised,
+            contentColor = if (active) ZeronColors.bg else ZeronColors.textFaint,
+            disabledContainerColor = ZeronColors.surfaceRaised,
+            disabledContentColor = ZeronColors.textFaint,
+        ),
+        modifier = Modifier.size(44.dp).clip(CircleShape),
+    ) {
+        if (sending) {
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = ZeronColors.bg,
+                    strokeWidth = 2.dp,
+                )
+                Icon(
+                    painterResource(R.drawable.ic_stop),
+                    contentDescription = stringResource(R.string.composer_stop),
+                    modifier = Modifier.size(10.dp),
+                )
+            }
+        } else {
+            Icon(
+                painterResource(R.drawable.ic_arrow_upward),
+                contentDescription = stringResource(R.string.composer_send),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The agent asked a question with fixed choices.
+ *
+ * Previously inert: the options carried no click handler, so `selected` could
+ * never leave null, and Submit/Cancel were bare Text — `onAnswer`/`onCancel`
+ * were never called.
+ */
 @Composable
 fun InputRequestPanel(
     question: String,
     options: List<String>,
     onAnswer: (String) -> Unit,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    var selected by remember { mutableStateOf<String?>(null) }
-    androidx.compose.foundation.layout.Column(
-        Modifier
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    Column(
+        modifier
             .fillMaxWidth()
-            .padding(12.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(ZeronSpacing.md)
+            .clip(MaterialTheme.shapes.medium)
             .background(ZeronColors.surfaceRaised)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(ZeronSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
     ) {
         Text(question, style = MaterialTheme.typography.bodyLarge, color = ZeronColors.text)
-        options.forEachIndexed { i, opt ->
-            Text(
-                "${i + 1}. $opt",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected == opt) ZeronColors.accent else ZeronColors.textMuted,
-                modifier = Modifier
+        options.forEach { option ->
+            Row(
+                Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected == opt) ZeronColors.elementHover else Color.Transparent)
-                    .padding(10.dp)
-                    .semantics { contentDescription = "Answer $opt" },
-            )
+                    .clip(MaterialTheme.shapes.small)
+                    .selectable(
+                        selected = selected == option,
+                        role = Role.RadioButton,
+                        onClick = { selected = option },
+                    )
+                    .padding(vertical = ZeronSpacing.xs, horizontal = ZeronSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
+            ) {
+                RadioButton(
+                    selected = selected == option,
+                    onClick = null, // the whole row is the target
+                    colors = RadioButtonDefaults.colors(
+                        selectedColor = ZeronColors.accent,
+                        unselectedColor = ZeronColors.textFaint,
+                    ),
+                )
+                Text(
+                    option,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected == option) ZeronColors.text else ZeronColors.textMuted,
+                )
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Submit",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected != null) ZeronColors.accent else ZeronColors.textFaint,
-                modifier = Modifier.padding(8.dp),
-            )
-            Text(
-                "Cancel",
-                style = MaterialTheme.typography.bodyMedium,
-                color = ZeronColors.textMuted,
-                modifier = Modifier.padding(8.dp),
-            )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm, Alignment.End),
+        ) {
+            TextButton(onClick = onCancel) {
+                Text(
+                    stringResource(R.string.input_request_cancel),
+                    color = ZeronColors.textMuted,
+                )
+            }
+            Button(
+                onClick = { selected?.let(onAnswer) },
+                enabled = selected != null,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ZeronColors.text,
+                    contentColor = ZeronColors.bg,
+                    disabledContainerColor = ZeronColors.surface,
+                    disabledContentColor = ZeronColors.textFaint,
+                ),
+            ) {
+                Text(stringResource(R.string.input_request_submit))
+            }
         }
-    }
-    if (selected != null) {
-        // Selection is submitted through the button row above; kept explicit so
-        // a double tap cannot send twice.
     }
 }
