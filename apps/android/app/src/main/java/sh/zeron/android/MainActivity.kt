@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
                     onBack = { viewModel.closeChat() },
                     onSend = { viewModel.sendPrompt(it) },
                     onStop = { viewModel.interrupt() },
+                    onRetry = { viewModel.retryRegistry() },
+                    onSignOut = { viewModel.signOut() },
                 )
             }
         }

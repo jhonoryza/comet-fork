@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,10 +33,15 @@ fun OrgPickerScreen(orgs: List<AuthOrg>, onSelect: (AuthOrg) -> Unit) {
         ) {
             Text(
                 stringResource(R.string.org_picker_title),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineMedium,
                 color = ZeronColors.text,
-                modifier = Modifier.padding(bottom = ZeronSpacing.sm),
             )
+            Text(
+                stringResource(R.string.org_picker_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = ZeronColors.textMuted,
+            )
+            Spacer(Modifier.height(ZeronSpacing.md))
             orgs.forEach { org ->
                 Row(org, onSelect)
             }

@@ -4,8 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import sh.zeron.android.auth.AuthOrg
 import sh.zeron.android.data.ChatRow
 import sh.zeron.android.data.Transcript
@@ -14,7 +20,7 @@ import sh.zeron.android.ui.session.Composer
 import sh.zeron.android.ui.session.ComposerMode
 import sh.zeron.android.ui.session.ComposerState
 import sh.zeron.android.ui.session.SessionScreen
-import sh.zeron.android.ui.theme.MonoStyle
+import sh.zeron.android.ui.transcript.TranscriptView
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.workspace.WorkspaceScreen
 
@@ -34,6 +40,8 @@ fun AppRoot(
     onBack: () -> Unit = {},
     onSend: (String) -> Unit = {},
     onStop: () -> Unit = {},
+    onRetry: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     if (selectedChat != null) {
         val chat = chats.firstOrNull { it.id == selectedChat }
@@ -61,7 +69,14 @@ fun AppRoot(
         is AppState.SignedOut -> SignInScreen(onLogIn)
         is AppState.SigningIn -> SignInScreen(onLogIn, isLoading = true)
         is AppState.SelectingOrg -> OrgPickerScreen(state.orgs, onOrgSelect)
-        is AppState.Ready -> WorkspaceScreen(chats, registryConnected, registryError, onOpenChat, {})
+        is AppState.Ready -> WorkspaceScreen(
+            chats = chats,
+            connected = registryConnected,
+            error = registryError,
+            onOpen = onOpenChat,
+            onRetry = onRetry,
+            onSignOut = onSignOut,
+        )
         is AppState.Fatal -> FatalScreen(state.message)
         else -> LoadingScreen()
     }
