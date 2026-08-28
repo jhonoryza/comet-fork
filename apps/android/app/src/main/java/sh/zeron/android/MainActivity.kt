@@ -102,6 +102,10 @@ class MainActivity : ComponentActivity() {
                 val transferProgress by viewModel.transferProgress.collectAsState()
                 val modelSelection by viewModel.modelSelection.collectAsState()
                 val harnessLocked by viewModel.harnessLocked.collectAsState()
+                val sessionCatalogs by viewModel.sessionCatalogs.collectAsState()
+                val openInputRequest by viewModel.openInputRequest.collectAsState()
+                val offline by viewModel.offline.collectAsState()
+                val deliveryDegraded by viewModel.deliveryDegraded.collectAsState()
                 val deliveryBadges by viewModel.deliveryBadges.collectAsState()
                 AppRoot(
                     state = state,
@@ -122,6 +126,11 @@ class MainActivity : ComponentActivity() {
                     harnessLocked = harnessLocked,
                     onSelectModel = { harness, model -> viewModel.selectModel(harness, model) },
                     onSelectReasoning = { level -> viewModel.selectReasoning(level) },
+                    sessionCatalogs = sessionCatalogs,
+                    openInputRequest = openInputRequest,
+                    onAnswerInput = { requestId, answers -> viewModel.answerInput(requestId, answers) },
+                    offline = offline,
+                    deliveryDegraded = deliveryDegraded,
                     newSessionOpen = newSessionOpen,
                     spaces = spaces,
                     devices = devices,

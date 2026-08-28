@@ -9,9 +9,27 @@ sealed class Part {
     data class Text(val id: String, val text: String) : Part()
     data class Reasoning(val id: String, val text: String) : Part()
     data class Tool(val id: String, val call: String, val isError: Boolean, val output: String?) : Part()
-    data class Input(val id: String, val question: String) : Part()
+    data class Input(val id: String, val questions: List<InputQuestion>, val resolved: Boolean) : Part()
     data class Error(val id: String, val message: String) : Part()
 }
+
+/**
+ * One agent question (proto `UserInputQuestion`): a header, the question text,
+ * plain option labels, and a multi-select flag.
+ */
+data class InputQuestion(
+    val id: String,
+    val header: String,
+    val question: String,
+    val options: List<String>,
+    val multiSelect: Boolean,
+)
+
+/** One answered question (proto `UserInputAnswer`). */
+data class InputAnswer(
+    val questionId: String,
+    val labels: List<String>,
+)
 
 /**
  * Entry lifecycle (schema.rs `MessageStatus`). `Streaming` is the host saying
@@ -71,6 +89,21 @@ data class Transcript(
     val parts: List<Part> get() = messages.flatMap { it.parts }
 
     val isEmpty: Boolean get() = messages.isEmpty()
+
+    /**
+     * The unresolved input request to surface in the question panel (iOS
+     * SessionStore.openInputRequest): the newest input part that is not yet
+     * resolved and actually has answerable questions. An empty question list
+     * must not take the composer's place — the user would have no way to type.
+     */
+    val openInputRequest: Part.Input? get() {
+        for (message in messages.asReversed()) {
+            for (part in message.parts.asReversed()) {
+                if (part is Part.Input && !part.resolved && part.questions.isNotEmpty()) return part
+            }
+        }
+        return null
+    }
 }
 
 class SessionAdapter(private val doc: LoroDoc) {
@@ -111,7 +144,7 @@ class SessionAdapter(private val doc: LoroDoc) {
                                 p.optString("output").ifBlank { null },
                             )
                         }
-                        "input" -> parts += Part.Input(partId, p.optString("message", "Question"))
+                        "input" -> parts += Part.Input(partId, parseInputQuestions(p.optJSONArray("questions")), p.optBoolean("resolved", false))
                         "error" -> parts += Part.Error(partId, p.optString("message", "Error"))
                         else -> text?.let { parts += Part.Text(partId, it) }
                     }
@@ -125,6 +158,33 @@ class SessionAdapter(private val doc: LoroDoc) {
             if (out.isEmpty()) return Transcript(emptyList())
         }
         return Transcript(out, working = lastStatus == MessageStatus.Streaming)
+    }
+
+    /**
+     * Wire questions (`proto::agent::UserInputQuestion`, camelCase): a list of
+     * {id, header, question, options, multiSelect} objects. Unknown entries
+     * are skipped rather than dropped wholesale — one malformed question must
+     * not blank the panel.
+     */
+    private fun parseInputQuestions(arr: JSONArray?): List<InputQuestion> {
+        if (arr == null) return emptyList()
+        val out = mutableListOf<InputQuestion>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("id")
+            if (id.isEmpty()) continue
+            val options = o.optJSONArray("options")?.let { opts ->
+                (0 until opts.length()).mapNotNull { opts.optString(it).takeIf { s -> s.isNotEmpty() } }
+            } ?: emptyList()
+            out += InputQuestion(
+                id = id,
+                header = o.optString("header"),
+                question = o.optString("question", "Question"),
+                options = options,
+                multiSelect = o.optBoolean("multiSelect", false),
+            )
+        }
+        return out
     }
 
     /// Durable command-ledger append (viewer-only write allowed by writer discipline).

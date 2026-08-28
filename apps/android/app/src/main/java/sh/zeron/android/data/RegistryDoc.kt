@@ -12,6 +12,8 @@ data class ChatRow(
     val deviceId: String? = null,
     /** Session config (harness/model the host runs with), when the row carries one. */
     val config: ChatConfig? = null,
+    /** The base ref the session is pinned to (composer BranchContextChip). */
+    val branch: String? = null,
 )
 
 /** Chat config — LWW `config` field on the registry chat row (iOS ChatConfig). */
@@ -239,6 +241,7 @@ class RegistryAdapter(private val doc: RegistryDoc) {
             spaceId = row.field("spaceId"),
             deviceId = row.field("deviceId"),
             config = ChatConfig.parse(row.fields.optJSONObject("config")),
+            branch = row.field("branch"),
         )
     }.sortedWith(compareByDescending<ChatRow> { it.archived }.thenBy { it.title })
 

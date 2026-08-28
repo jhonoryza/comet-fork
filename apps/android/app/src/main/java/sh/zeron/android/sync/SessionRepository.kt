@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import sh.zeron.android.data.InputAnswer
 import sh.zeron.android.data.SessionAdapter
 import sh.zeron.android.data.Transcript
 import sh.zeron.android.loro.LoroDoc
@@ -100,8 +101,8 @@ class SessionRepository(
         trackPending(messageId, text)
     }
     suspend fun interrupt() = queueAndPush("interrupt", JSONObject().put("kind", "interrupt"))
-    suspend fun respondInput(requestId: String, answer: String) =
-        queueAndPush("respondInput", respondInputPayload(requestId, answer))
+    suspend fun respondInput(requestId: String, answers: List<InputAnswer>) =
+        queueAndPush("respondInput", respondInputPayload(requestId, answers))
 
     private fun runPayload(text: String, harness: String?, model: String?, reasoning: String?, cwd: String?, worktree: JSONObject?, messageId: String, attachments: List<String> = emptyList()): JSONObject {
         // RunRequest (crates/proto/src/agent.rs). "~" is the project-less
@@ -216,19 +217,22 @@ class SessionRepository(
     }
 
     /**
-     * Best-effort: the Android transcript doesn't surface the harness-minted
-     * question ids, so the first answer labels the request id. Shape is right
-     * (`answers: [{questionId, labels}]`); wire the real question ids when a
-     * question panel lands on Android.
+     * session_command_payload respondInput (crates/doc/src/commands.rs): one
+     * answer per question, `answers: [{questionId, labels}]` — labels from the
+     * picked options, or a single typed custom answer. The part's own id IS
+     * the harness-minted request id (schema.rs input part).
      */
-    private fun respondInputPayload(requestId: String, answer: String): JSONObject {
-        val answerJson = JSONObject()
-            .put("questionId", requestId)
-            .put("labels", JSONArray().put(answer))
+    private fun respondInputPayload(requestId: String, answers: List<InputAnswer>): JSONObject {
+        val answerArr = JSONArray()
+        answers.forEach { a ->
+            answerArr.put(JSONObject()
+                .put("questionId", a.questionId)
+                .put("labels", JSONArray().apply { a.labels.forEach { put(it) } }))
+        }
         return JSONObject()
             .put("kind", "respondInput")
             .put("requestId", requestId)
-            .put("answers", JSONArray().put(answerJson))
+            .put("answers", answerArr)
     }
 
     /** Network recovery: re-dial the chat2 room (unacked pushes re-send). */

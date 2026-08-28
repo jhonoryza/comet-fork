@@ -41,6 +41,7 @@
     <string name="session_working">Working…</string>
     <string name="session_scroll_top">Scroll to top</string>
     <string name="session_scroll_bottom">Scroll to bottom</string>
+    <string name="session_question">Question</string>
 
     <!-- Session status -->
     <string name="status_connecting">Connecting…</string>
@@ -62,6 +63,8 @@
     <string name="composer_remove_attachment">Remove attachment</string>
     <string name="attach_failed">That image couldn\'t be attached (unsupported or over 24 MB).</string>
     <string name="attachment_error">Image unavailable</string>
+    <string name="composer_offline_notice">Offline — messages will send when you\'re back online.</string>
+    <string name="composer_degraded_notice">Messages will send once the connection recovers.</string>
 
     <!-- Model picker -->
     <string name="model_picker_label">Model</string>
@@ -104,8 +107,10 @@
 
     <!-- Input request -->
     <string name="input_request_submit">Submit</string>
-    <string name="input_request_cancel">Cancel</string>
-    <string name="input_request_option">Answer %1$s</string>
+    <string name="input_request_back">Back</string>
+    <string name="input_request_next">Next</string>
+    <string name="input_request_typed">Or type your own answer</string>
+    <string name="input_request_multi_hint">Select one or more options.</string>
 
     <!-- Shared -->
     <string name="loading">Connecting…</string>

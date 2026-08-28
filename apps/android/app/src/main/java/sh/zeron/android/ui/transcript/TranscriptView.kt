@@ -441,7 +441,9 @@ private fun PartView(part: Part, streaming: Boolean) {
         is Part.Reasoning -> ReasoningView(part, streaming)
         is Part.Tool -> Unit // tool calls are not conversation — see TranscriptView
         is Part.Input -> NoticeCard(
-            text = part.question,
+            // The panel carries the live question; the transcript keeps a
+            // record of what was asked (first question, as a summary).
+            text = part.questions.firstOrNull()?.question ?: stringResource(R.string.session_question),
             tone = ZeronColors.warning,
             background = ZeronColors.surfaceRaised,
         )

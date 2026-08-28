@@ -83,6 +83,66 @@ class SessionAdapterTest {
         assertFalse(ts.working)
     }
 
+    @Test fun inputPartParsesQuestions() = runTest {
+        val json = """
+            {"messages":[{"id":"m1","parts":[{
+              "id":"req-1","kind":"input","resolved":false,
+              "questions":[
+                {"id":"q1","header":"Choice","question":"Pick one","options":["A","B"],"multiSelect":false},
+                {"id":"q2","header":"Tags","question":"Pick many","options":["X","Y"],"multiSelect":true}
+              ]
+            }]}]}
+        """.trimIndent()
+        val input = doc(json).transcript().messages[0].parts[0] as Part.Input
+        assertEquals("req-1", input.id)
+        assertFalse(input.resolved)
+        assertEquals(2, input.questions.size)
+        assertEquals("q1", input.questions[0].id)
+        assertEquals("Pick one", input.questions[0].question)
+        assertEquals(listOf("A", "B"), input.questions[0].options)
+        assertFalse(input.questions[0].multiSelect)
+        assertTrue(input.questions[1].multiSelect)
+    }
+
+    @Test fun unresolvedInputIsTheOpenRequest() = runTest {
+        val json = """
+            {"messages":[{"id":"m1","parts":[{
+              "id":"req-1","kind":"input","resolved":false,
+              "questions":[{"id":"q1","header":"H","question":"Pick one","options":["A"],"multiSelect":false}]
+            }]}]}
+        """.trimIndent()
+        val request = doc(json).transcript().openInputRequest
+        assertNotNull(request)
+        assertEquals("req-1", request?.id)
+    }
+
+    @Test fun resolvedInputIsNotTheOpenRequest() = runTest {
+        val json = """
+            {"messages":[{"id":"m1","parts":[{
+              "id":"req-1","kind":"input","resolved":true,
+              "questions":[{"id":"q1","header":"H","question":"Pick one","options":["A"],"multiSelect":false}]
+            }]}]}
+        """.trimIndent()
+        assertNull(doc(json).transcript().openInputRequest)
+    }
+
+    /** An empty question list can't be answered — it must not take the composer. */
+    @Test fun questionlessInputIsNotTheOpenRequest() = runTest {
+        val json = """{"messages":[{"id":"m1","parts":[{"id":"req-1","kind":"input","resolved":false,"questions":[]}]}]}"""
+        assertNull(doc(json).transcript().openInputRequest)
+    }
+
+    /** The newest UNRESOLVED input wins: scanning reversed skips a resolved tail. */
+    @Test fun newestUnresolvedInputWins() = runTest {
+        val json = """
+            {"messages":[
+              {"id":"m1","parts":[{"id":"open","kind":"input","resolved":false,"questions":[{"id":"q","header":"H","question":"still open","options":[],"multiSelect":false}]}]},
+              {"id":"m2","parts":[{"id":"done","kind":"input","resolved":true,"questions":[{"id":"q","header":"H","question":"answered","options":[],"multiSelect":false}]}]}
+            ]}
+        """.trimIndent()
+        assertEquals("open", doc(json).transcript().openInputRequest?.id)
+    }
+
     @Test fun malformedJsonYieldsEmpty() = runTest {
         // FakeLoroDoc returns raw json; bad JSON → empty, not crash
         val ts = SessionAdapter(FakeLoroDoc("{ not json }")).transcript()
