@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "sh.zeron.android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Base id is the real one; the debug build appends `.debug` so both can
