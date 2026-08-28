@@ -18,14 +18,18 @@ import sh.zeron.android.data.ChatRow
 fun WorkspaceScreen(
     chats: List<ChatRow>,
     connected: Boolean,
+    error: String?,
     onOpen: (String) -> Unit,
     onArchive: (String) -> Unit,
 ) {
     if (chats.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(24.dp)) {
             Text(
-                if (connected) "No sessions yet.\n\nStart one from a desktop device — it appears here."
-                else "Connecting to the edge…\n\nIf this stays empty, check network access and that this account has a device online.",
+                when {
+                    error != null -> "Registry error: $error"
+                    connected -> "No sessions yet.\n\nStart one from a desktop device — it appears here."
+                    else -> "Connecting to the edge…"
+                },
                 Modifier.align(Alignment.Center)
             )
         }

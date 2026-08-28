@@ -32,6 +32,9 @@ class AppViewModel(
     /** False when the registry room isn't joined yet (no chats to show). */
     val registryConnected = registry.connected
 
+    /** Surfaced so a failed room join shows a reason instead of a spinner. */
+    val registryError = registry.lastError
+
     /** Live session doc for the open chat; null while in workspace. */
     private var openDoc: LoroDoc? = null
     private val _transcript = MutableStateFlow(Transcript(emptyList()))
