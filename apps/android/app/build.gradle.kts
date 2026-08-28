@@ -27,6 +27,10 @@ android {
         release {
             isMinifyEnabled = false
             ndk { abiFilters += listOf("arm64-v8a") }
+            // No release keystore yet: sign with the debug key so the CI APK is
+            // installable for manual testing. Swap in a real signingConfig
+            // (android/key.properties + secrets) before any public release.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -50,15 +54,6 @@ android {
     lint {
         abortOnError = false
         warningsAsErrors = false
-    }
-}
-
-androidComponents {
-    beforeVariants { variant ->
-        // Keep internal APK arm64-only; x86_64 only for CI/emulator via debug.
-        if (variant.name == "release") {
-            // validation in CI inspects APK abi contents
-        }
     }
 }
 
