@@ -214,7 +214,6 @@ fun NewSessionScreen(
                     onSteer = {},
                     onStop = {},
                     modelSelection = modelSelection,
-                    pickerLocked = false,
                     harnessLocked = false,
                     harnesses = harnesses,
                     catalogs = catalogs,

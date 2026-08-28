@@ -101,7 +101,6 @@ class MainActivity : ComponentActivity() {
                 val sendState by viewModel.sendState.collectAsState()
                 val transferProgress by viewModel.transferProgress.collectAsState()
                 val modelSelection by viewModel.modelSelection.collectAsState()
-                val pickerLocked by viewModel.pickerLocked.collectAsState()
                 val harnessLocked by viewModel.harnessLocked.collectAsState()
                 val deliveryBadges by viewModel.deliveryBadges.collectAsState()
                 AppRoot(
@@ -120,7 +119,6 @@ class MainActivity : ComponentActivity() {
                     transferProgress = transferProgress,
                     onRetryDelivery = { viewModel.retryDelivery() },
                     modelSelection = modelSelection,
-                    pickerLocked = pickerLocked,
                     harnessLocked = harnessLocked,
                     onSelectModel = { harness, model -> viewModel.selectModel(harness, model) },
                     onSelectReasoning = { level -> viewModel.selectReasoning(level) },

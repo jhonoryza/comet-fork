@@ -3,6 +3,7 @@ package sh.zeron.android.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,7 @@ import sh.zeron.android.ui.session.ComposerState
 import sh.zeron.android.ui.session.SessionScreen
 import sh.zeron.android.ui.transcript.TranscriptView
 import sh.zeron.android.ui.theme.ZeronColors
+import sh.zeron.android.ui.theme.ZeronSpacing
 import sh.zeron.android.ui.workspace.WorkspaceScreen
 
 @Composable
@@ -51,7 +53,6 @@ fun AppRoot(
     transferProgress: Double? = null,
     onRetryDelivery: () -> Unit = {},
     modelSelection: HarnessCatalog.Selection = HarnessCatalog.defaultSelection(),
-    pickerLocked: Boolean = false,
     harnessLocked: Boolean = false,
     onSelectModel: (String, String) -> Unit = { _, _ -> },
     onSelectReasoning: (String) -> Unit = {},
@@ -133,6 +134,13 @@ fun AppRoot(
     }
     if (selectedChat != null) {
         val chat = chats.firstOrNull { it.id == selectedChat }
+        // "The model has not finished": the host's own entry status, plus the
+        // window between queueing a prompt and the host adopting it (no doc
+        // entry exists yet, but the turn is very much on its way).
+        val running = sending ||
+            transcript.working ||
+            sendState == SendState.Sending ||
+            sendState == SendState.Queued
         SessionScreen(
             title = chat?.title ?: selectedChat,
             status = sessionStatus,
@@ -144,7 +152,15 @@ fun AppRoot(
             transcript = { padding ->
                 TranscriptView(
                     transcript,
-                    contentPadding = padding,
+                    // The scaffold's inset is bars only — messages still need
+                    // a gutter, or bubbles run edge to edge.
+                    contentPadding = PaddingValues(
+                        start = ZeronSpacing.lg,
+                        end = ZeronSpacing.lg,
+                        top = padding.calculateTopPadding() + ZeronSpacing.md,
+                        bottom = padding.calculateBottomPadding() + ZeronSpacing.md,
+                    ),
+                    working = running,
                     attachmentDeviceId = attachmentDeviceId,
                     onLoadAttachment = onLoadAttachment,
                 )
@@ -154,12 +170,12 @@ fun AppRoot(
                     state = ComposerState(
                         mode = if (sending) ComposerMode.Sending else ComposerMode.Draft,
                         canSend = !sending,
+                        running = running,
                     ),
                     onSend = { text, attachments -> onSend(text, attachments) },
                     onSteer = { text -> onSend(text, emptyList()) },
                     onStop = onStop,
                     modelSelection = modelSelection,
-                    pickerLocked = pickerLocked,
                     harnessLocked = harnessLocked,
                     onSelectModel = onSelectModel,
                     onSelectReasoning = onSelectReasoning,

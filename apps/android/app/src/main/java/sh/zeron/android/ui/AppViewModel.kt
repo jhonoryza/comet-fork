@@ -86,20 +86,11 @@ class AppViewModel(
     val modelSelection: StateFlow<HarnessCatalog.Selection> = _modelSelection
 
     /**
-     * True when the session's config names a harness this catalog can't model
-     * (grok/hermes/pi): the provider is fixed AND there is no sensible static
-     * model list (iOS shows a live device catalog there; Android can't), so
-     * the whole picker is read-only.
-     */
-    private val _pickerLocked = MutableStateFlow(false)
-    val pickerLocked: StateFlow<Boolean> = _pickerLocked
-
-    /**
-     * True once the session's own config is known and its harness is in the
-     * catalog: iOS-parity `lockedHarness` — the provider is set-once on the
-     * host (stamped on the first run, never updated), so the harness is locked
-     * mid-session while the model stays switchable within it. Only a
-     * config-less chat lets the picker choose the provider too.
+     * True once the session's own config is known: iOS-parity `lockedHarness`
+     * — the provider is set-once on the host (stamped on the first run, never
+     * updated), so the harness is locked mid-session while the model stays
+     * switchable within it. Only a config-less chat lets the picker choose
+     * the provider too.
      */
     private val _harnessLocked = MutableStateFlow(false)
     val harnessLocked: StateFlow<Boolean> = _harnessLocked
@@ -282,20 +273,17 @@ class AppViewModel(
         sessionChatId = id
         // iOS parity: a session's provider is set-once on the host (stamped on
         // the first run, never updated), so the harness is locked mid-session
-        // while the model stays switchable within it. A config naming a
-        // harness this catalog can't model (grok/hermes/pi) locks the whole
-        // picker — no sensible static model list exists for it. Only a
+        // while the model stays switchable within it — the static catalog
+        // models every harness the fleet can produce (grok/hermes/pi included),
+        // so the picker is never read-only for a configured session. Only a
         // config-less chat stays fully editable; its first run stamps the pair.
         // NOTE: named `chatConfig` — it must NOT shadow the AppConfig ctor
         // param `config` used below for deviceId.
         val chatConfig = chats.value.firstOrNull { it.id == id }?.config
         if (chatConfig != null) {
-            val known = HarnessCatalog.knows(chatConfig.harness ?: "")
             _modelSelection.value = HarnessCatalog.Selection(chatConfig.harness ?: "", chatConfig.model, chatConfig.reasoning)
-            _pickerLocked.value = !known
-            _harnessLocked.value = known
+            _harnessLocked.value = true
         } else {
-            _pickerLocked.value = false
             _harnessLocked.value = false
         }
         closeSession()
@@ -801,13 +789,12 @@ class AppViewModel(
 
     /**
      * The composer's model picker: harness + model id (HarnessCatalog ids).
-     * A locked provider rejects cross-harness picks (iOS `lockedHarness`); a
-     * fully locked session (unknown-harness config) rejects everything. A pick
-     * also rewrites the chat row's config (iOS `setChatConfig`), so the next
-     * run on ANY device dispatches with it — not just this phone's next send.
+     * A locked provider rejects cross-harness picks (iOS `lockedHarness`). A
+     * pick also rewrites the chat row's config (iOS `setChatConfig`), so the
+     * next run on ANY device dispatches with it — not just this phone's next
+     * send.
      */
     fun selectModel(harness: String, model: String) {
-        if (_pickerLocked.value) return // no usable model list for this session
         if (_harnessLocked.value && harness != _modelSelection.value.harness) return // provider is fixed
         val catalog = modelsFor(harness)
         if (catalog.none { it.id == model }) return
@@ -828,7 +815,6 @@ class AppViewModel(
 
     /** The composer's effort picker (iOS TraitPickerSheet) — run-level only. */
     fun selectReasoning(level: String) {
-        if (_pickerLocked.value) return
         _modelSelection.value =
             _modelSelection.value.copy(reasoning = level)
         persistConfig(
