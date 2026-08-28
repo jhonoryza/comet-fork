@@ -125,12 +125,6 @@ object HarnessCatalog {
         reasoning = defaultReasoning(models(harnesses.first().id).first()),
     )
 
-    /** True when the harness id is one this picker can offer. */
-    fun knows(harness: String): Boolean = harnesses.any { it.id == harness }
-
-    fun knowsModel(harness: String, model: String?): Boolean =
-        model != null && models(harness).any { it.id == model }
-
     fun modelLabel(harness: String, modelId: String?): String {
         if (modelId == null) return models(harness).first().label
         return models(harness).firstOrNull { it.id == modelId }?.label ?: modelId

@@ -72,6 +72,12 @@ enum class ComposerMode { Draft, Sending, Steering, Disabled }
 data class ComposerState(
     val mode: ComposerMode = ComposerMode.Draft,
     val canSend: Boolean = false,
+    /**
+     * A turn is in flight on the host (doc entry still `streaming`, or a send
+     * not yet adopted). The button is a Stop for as long as this holds — the
+     * text field stays live so the next prompt can be drafted meanwhile.
+     */
+    val running: Boolean = false,
 )
 
 /**
@@ -88,7 +94,6 @@ fun Composer(
     onSteer: (String) -> Unit,
     onStop: () -> Unit,
     modelSelection: HarnessCatalog.Selection = HarnessCatalog.defaultSelection(),
-    pickerLocked: Boolean = false,
     harnessLocked: Boolean = false,
     harnesses: List<HarnessInfo>? = null,
     catalogs: Map<String, List<ModelInfo>> = emptyMap(),
@@ -135,9 +140,11 @@ fun Composer(
             ?.firstOrNull { it.id == modelSelection.model }?.reasoningLevels
             ?: HarnessCatalog.reasoningLevels(modelSelection.harness, modelSelection.model)
     }
-    val sending = state.mode == ComposerMode.Sending
-    val enabled = state.mode != ComposerMode.Disabled && !sending
-    val canSubmit = draft.isNotBlank() && state.canSend
+    val sending = state.running || state.mode == ComposerMode.Sending
+    // Drafting stays open while a turn runs: a long run must not lock the
+    // keyboard for minutes. Only the submit is held back.
+    val enabled = state.mode != ComposerMode.Disabled
+    val canSubmit = draft.isNotBlank() && state.canSend && !sending
 
     fun submit() {
         if (!canSubmit) return
@@ -168,7 +175,6 @@ fun Composer(
             // iOS ComposerChip split: model chip | trait (effort) chip.
             ModelPickerRow(
                 label = HarnessCatalog.modelLabel(modelSelection.harness, modelSelection.model),
-                locked = pickerLocked,
                 onClick = { showModelPicker = true },
                 modifier = Modifier.weight(1f),
             )
@@ -176,7 +182,6 @@ fun Composer(
             if (reasoning != null && modelLevels.isNotEmpty()) {
                 TraitPickerRow(
                     label = HarnessCatalog.reasoningLabel(reasoning),
-                    locked = pickerLocked,
                     onClick = { showTraitPicker = true },
                 )
             }
@@ -258,7 +263,7 @@ fun Composer(
             )
         }
     }
-    if (showModelPicker && !pickerLocked) {
+    if (showModelPicker) {
         ModelPickerSheet(
             selection = modelSelection,
             lockedHarness = harnessLocked,
@@ -271,7 +276,7 @@ fun Composer(
             onDismiss = { showModelPicker = false },
         )
     }
-    if (showTraitPicker && !pickerLocked) {
+    if (showTraitPicker) {
         TraitPickerSheet(
             levels = modelLevels,
             selected = modelSelection.reasoning,
@@ -331,17 +336,17 @@ private fun AttachmentStrip(
 }
 
 /**
- * One-line model selector above the input. Editable sessions show the picked
- * model with an expand chevron; sessions with no usable model list (the host
- * stamped a harness outside this catalog) render the label read-only.
+ * One-line model selector above the input: the picked model with an expand
+ * chevron — the sheet that follows is always interactive, the harness locked
+ * mid-session but the model list fully pickable.
  */
 @Composable
-private fun ModelPickerRow(label: String, locked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ModelPickerRow(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .padding(vertical = ZeronSpacing.xs)
             .clip(MaterialTheme.shapes.extraSmall)
-            .then(if (locked) Modifier else Modifier.clickable(onClick = onClick))
+            .clickable(onClick = onClick)
             .padding(horizontal = ZeronSpacing.sm, vertical = ZeronSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.xs),
@@ -358,25 +363,23 @@ private fun ModelPickerRow(label: String, locked: Boolean, onClick: () -> Unit, 
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
-        if (!locked) {
-            Icon(
-                painterResource(R.drawable.ic_expand_more),
-                contentDescription = stringResource(R.string.model_picker_title),
-                tint = ZeronColors.textFaint,
-                modifier = Modifier.size(16.dp),
-            )
-        }
+        Icon(
+            painterResource(R.drawable.ic_expand_more),
+            contentDescription = stringResource(R.string.model_picker_title),
+            tint = ZeronColors.textFaint,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
 /** The effort chip (iOS TraitPickerSheet trigger) — shown when the model has a ladder. */
 @Composable
-private fun TraitPickerRow(label: String, locked: Boolean, onClick: () -> Unit) {
+private fun TraitPickerRow(label: String, onClick: () -> Unit) {
     Row(
         Modifier
             .padding(vertical = ZeronSpacing.xs)
             .clip(MaterialTheme.shapes.extraSmall)
-            .then(if (locked) Modifier else Modifier.clickable(onClick = onClick))
+            .clickable(onClick = onClick)
             .padding(horizontal = ZeronSpacing.sm, vertical = ZeronSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.xs),
@@ -388,14 +391,12 @@ private fun TraitPickerRow(label: String, locked: Boolean, onClick: () -> Unit) 
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
-        if (!locked) {
-            Icon(
-                painterResource(R.drawable.ic_expand_more),
-                contentDescription = stringResource(R.string.trait_picker_title),
-                tint = ZeronColors.textFaint,
-                modifier = Modifier.size(16.dp),
-            )
-        }
+        Icon(
+            painterResource(R.drawable.ic_expand_more),
+            contentDescription = stringResource(R.string.trait_picker_title),
+            tint = ZeronColors.textFaint,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
