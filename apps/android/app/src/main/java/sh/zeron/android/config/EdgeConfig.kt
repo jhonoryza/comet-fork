@@ -36,4 +36,21 @@ object EdgeConfig {
     /** chat2 room URL (iOS AppConfig.chat2SocketURL). */
     fun chat2WSUrl(chatId: String, token: String, deviceId: String): String =
         "${wsBase(edgeBaseUrl)}/chat2/$chatId/ws?token=$token&device=$deviceId"
+
+    /**
+     * Device-room relay URL for RPC to a host device (iOS DeviceRelayClient:
+     * `/device/{deviceId}/ws?role=client&connId=…&token=…`). A fresh connId per
+     * connect — reusing one can briefly leave two tagged sockets in the DO.
+     */
+    fun relayWsUrl(deviceId: String, token: String): String =
+        "${wsBase(edgeBaseUrl)}/device/$deviceId/ws?role=client&connId=${java.util.UUID.randomUUID()}&token=$token"
+
+    /**
+     * GET /chat2/{chatId}/checkpoint — the Range-resumable doc snapshot a
+     * fresh reader must fetch when the room's history was compacted (iOS
+     * AppConfig.chat2CheckpointRequest). Auth rides ?token= like the socket
+     * URLs (edge auth accepts both that and a Bearer header).
+     */
+    fun chat2CheckpointUrl(chatId: String, token: String): String =
+        "${edgeBaseUrl.trimEnd('/')}/chat2/$chatId/checkpoint?token=$token"
 }

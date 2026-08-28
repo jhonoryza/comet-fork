@@ -4,10 +4,18 @@ import org.json.JSONObject
 
 sealed class RegistryFrame {
     data class Hello(val cursor: Long?, val device: String) : RegistryFrame()
-    data class Push(val batch: String, val ops: String) : RegistryFrame()
+    /** ops is the JSON array `[Op]` itself — the wire shape is an array, not a string. */
+    data class Push(val batch: String, val ops: org.json.JSONArray) : RegistryFrame()
     data class Presence(val at: Long) : RegistryFrame()
     object Probe : RegistryFrame()
-    data class State(val seq: Long, val full: Boolean, val gcFloor: Long, val rows: String) : RegistryFrame()
+    data class State(
+        val seq: Long,
+        val full: Boolean,
+        val gcFloor: Long,
+        val rows: String,
+        /** deviceId → last presence beat ms (drives deviceOnline). */
+        val presence: Map<String, Long> = emptyMap(),
+    ) : RegistryFrame()
     data class Rows(val seq: Long, val rows: String) : RegistryFrame()
     data class Ack(val batch: String, val seq: Long, val applied: Long) : RegistryFrame()
     data class PresenceBeat(val device: String, val at: Long) : RegistryFrame()
@@ -42,12 +50,24 @@ object RegistryCodec {
         when (o.optString("t")) {
             // rows/presence are containers — keep them as text/typed values and
             // let the doc layer merge; optJSONArray keeps a missing key benign.
-            "state" -> RegistryFrame.State(
-                seq = o.optLong("seq", 0),
-                full = o.optBoolean("full", true),
-                gcFloor = o.optLong("gcFloor", 0),
-                rows = (o.optJSONArray("rows") ?: org.json.JSONArray()).toString(),
-            )
+            "state" -> {
+                val beats = o.optJSONObject("presence")?.let { p ->
+                    val keys = p.keys()
+                    buildMap {
+                        while (keys.hasNext()) {
+                            val device = keys.next()
+                            put(device, p.optLong(device, 0))
+                        }
+                    }
+                } ?: emptyMap()
+                RegistryFrame.State(
+                    seq = o.optLong("seq", 0),
+                    full = o.optBoolean("full", true),
+                    gcFloor = o.optLong("gcFloor", 0),
+                    rows = (o.optJSONArray("rows") ?: org.json.JSONArray()).toString(),
+                    presence = beats,
+                )
+            }
             "rows" -> RegistryFrame.Rows(
                 seq = o.optLong("seq", 0),
                 rows = (o.optJSONArray("rows") ?: org.json.JSONArray()).toString(),

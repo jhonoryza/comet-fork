@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import sh.zeron.android.R
+import sh.zeron.android.sync.SendState
 import sh.zeron.android.ui.SessionStatus
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.theme.ZeronSpacing
@@ -47,6 +49,9 @@ fun SessionScreen(
     title: String,
     status: SessionStatus,
     isArchived: Boolean,
+    sendState: SendState? = null,
+    transferProgress: Double? = null,
+    onRetryDelivery: () -> Unit = {},
     onBack: () -> Unit,
     transcript: @Composable (PaddingValues) -> Unit,
     composer: @Composable () -> Unit,
@@ -86,6 +91,7 @@ fun SessionScreen(
                     ),
                 )
                 HorizontalDivider(color = ZeronColors.divider)
+                DeliveryStrip(sendState, transferProgress, onRetryDelivery)
             }
         },
         bottomBar = { composer() },
@@ -95,11 +101,67 @@ fun SessionScreen(
 }
 
 /**
+ * The delivery-status strip (iOS SessionView's status strip / transcript.rs
+ * retry_send): "Uploading… N%" while an attachment escort pushes bytes;
+ * otherwise the pending send's truth — Sending / Queued / Failed with a
+ * tap-to-retry affordance.
+ */
+@Composable
+private fun DeliveryStrip(
+    sendState: SendState?,
+    transferProgress: Double?,
+    onRetryDelivery: () -> Unit,
+) {
+    val progress = transferProgress
+    val failed = sendState == SendState.Failed
+    val label: String? = when {
+        progress != null -> {
+            val pct = (progress * 100).toInt().coerceIn(0, 99)
+            stringResource(R.string.status_uploading, pct)
+        }
+        sendState == SendState.Sending -> stringResource(R.string.status_sending)
+        sendState == SendState.Queued -> stringResource(R.string.status_queued)
+        sendState == SendState.Failed -> stringResource(R.string.status_not_delivered)
+        else -> null
+    } ?: return
+    val tone = when {
+        progress != null -> ZeronColors.textMuted
+        failed -> ZeronColors.danger
+        sendState == SendState.Queued -> ZeronColors.warning
+        else -> ZeronColors.textMuted
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (failed) ZeronColors.danger.copy(alpha = 0.08f) else ZeronColors.bg)
+            .then(if (failed) Modifier.clickable(onClick = onRetryDelivery) else Modifier)
+            .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.xs),
+    ) {
+        if (progress != null) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                color = tone,
+                strokeWidth = 2.dp,
+            )
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tone,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
  * The connection state, as a short human label. The raw sync string lives in
  * [SessionStatus.Failed.detail] and is revealed by tapping — it used to be
  * printed straight into the app bar, where a message like "history compacted —
- * older messages need checkpoint fetch (not implemented)" wrapped across two
- * lines under the session title.
+ * older messages need checkpoint fetch" wrapped across two lines under the
+ * session title.
  */
 @Composable
 fun StatusChip(status: SessionStatus, isArchived: Boolean = false) {

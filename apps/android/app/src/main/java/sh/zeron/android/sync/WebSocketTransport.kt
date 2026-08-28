@@ -15,7 +15,7 @@ sealed class WsMessage {
     object Closed : WsMessage()
 }
 
-class FakeWebSocketTransport : WebSocketTransport {
+open class FakeWebSocketTransport : WebSocketTransport {
     private val inbound = kotlinx.coroutines.flow.MutableSharedFlow<WsMessage>()
     override fun connect(url: String): Flow<WsMessage> = inbound
     override suspend fun send(message: WsMessage) {}
