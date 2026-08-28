@@ -16,6 +16,7 @@ object NativeDocBridge {
     @JvmStatic external fun createDoc(): Long
     @JvmStatic external fun readJson(handle: Long): String
     @JvmStatic external fun import(handle: Long, hexBytes: String): Int
+    @JvmStatic external fun exportHex(handle: Long): String
     @JvmStatic external fun appendCommand(handle: Long, commandJson: String): Int
     @JvmStatic external fun free(handle: Long)
 }

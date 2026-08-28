@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">Zeron</string>
+
+    <!-- Sign in -->
+    <string name="signin_tagline">Your coding agents, from anywhere</string>
+    <string name="signin_action">Log in to Zeron</string>
+    <string name="signin_failed">Sign-in failed. Please try again.</string>
+
+    <!-- Workspace picker -->
+    <string name="org_picker_title">Choose a workspace</string>
+    <string name="org_picker_subtitle">Your account belongs to more than one workspace.</string>
+    <string name="org_picker_select">Select workspace %1$s</string>
+
+    <!-- Workspace -->
+    <string name="workspace_title">Sessions</string>
+    <string name="workspace_section_active">Active</string>
+    <string name="workspace_section_archived">Archived</string>
+    <string name="workspace_empty_title">No sessions yet</string>
+    <string name="workspace_empty_body">Start a session on a desktop device and it appears here.</string>
+    <string name="workspace_offline_title">Not connected</string>
+    <string name="workspace_offline_body">Waiting for the workspace connection.</string>
+    <string name="workspace_error_title">Can\'t load sessions</string>
+    <string name="workspace_retry">Try again</string>
+    <string name="workspace_more_actions">More actions</string>
+    <string name="workspace_sign_out">Sign out</string>
+    <string name="workspace_archive">Archive</string>
+    <string name="workspace_unarchive">Unarchive</string>
+    <string name="workspace_archived_label">Archived</string>
+    <string name="workspace_open_session">Open session %1$s</string>
+
+    <!-- Session -->
+    <string name="session_back">Back</string>
+    <string name="session_empty">No messages yet</string>
+    <string name="session_you">You</string>
+    <string name="session_agent">Agent</string>
+    <string name="session_thinking">Thinking</string>
+    <string name="session_details_show">Show details</string>
+    <string name="session_details_hide">Hide details</string>
+    <string name="session_tool">Tool</string>
+    <string name="session_tool_failed">Tool failed</string>
+
+    <!-- Session status -->
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_signed_out">Signed out</string>
+    <string name="status_history_trimmed">Older messages unavailable</string>
+    <string name="status_failed">Can\'t connect</string>
+
+    <!-- Composer -->
+    <string name="composer_placeholder">Message</string>
+    <string name="composer_input">Message input</string>
+    <string name="composer_send">Send</string>
+    <string name="composer_stop">Stop</string>
+
+    <!-- Input request -->
+    <string name="input_request_submit">Submit</string>
+    <string name="input_request_cancel">Cancel</string>
+    <string name="input_request_option">Answer %1$s</string>
+
+    <!-- Shared -->
+    <string name="loading">Connecting…</string>
+    <string name="error_title">Something went wrong</string>
+    <string name="error_back_to_sign_in">Back to sign in</string>
+</resources>

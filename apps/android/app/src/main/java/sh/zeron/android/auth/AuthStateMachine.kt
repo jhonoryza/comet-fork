@@ -11,6 +11,16 @@ class AuthStateMachine(
     private val refreshMutex = Mutex()
     var selectedOrgId: String? = null
 
+    /** WorkOS paste-code exchange (iOS AppModel.signIn). */
+    suspend fun signInWithCode(code: String): List<AuthOrg> = refreshMutex.withLock {
+        val (_, t) = client.exchange(code)
+        tokens.save(t.accessToken, t.refreshToken)
+        client.orgs(t.accessToken)
+    }
+
+    /** Current access token for socket URLs (never logged). */
+    suspend fun accessToken(): String? = tokens.load()?.first
+
     suspend fun selectOrgAndRefresh(orgId: String): AuthTokens = refreshMutex.withLock {
         val pair = tokens.load() ?: error("no refresh token")
         val scoped = client.refresh(pair.second, orgId)
