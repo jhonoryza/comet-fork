@@ -7,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
@@ -24,6 +23,7 @@ import sh.zeron.android.sync.OkHttpWebSocket
 import sh.zeron.android.sync.RegistrySync
 import sh.zeron.android.ui.AppRoot
 import sh.zeron.android.ui.AppViewModel
+import sh.zeron.android.ui.theme.ZeronTheme
 
 class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels {
@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 val config = EdgeConfig.appConfig(deviceId)
                 val auth = AuthStateMachine(HttpAuthClient(config, http), tokens)
                 val registry = RegistrySync(OkHttpWebSocket(), http)
-                return AppViewModel(auth, registry, config) as T
+                return AppViewModel(auth, registry, http, config) as T
             }
         }
     }
@@ -50,13 +50,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NativeLoader.loadOnce()
         setContent {
-            MaterialTheme {
+            ZeronTheme {
                 val state by viewModel.state.collectAsState()
                 val chats by viewModel.chats.collectAsState()
                 val selected by viewModel.selectedChat.collectAsState()
                 val transcript by viewModel.transcript.collectAsState()
                 val registryConnected by viewModel.registryConnected.collectAsState()
                 val registryError by viewModel.registryError.collectAsState()
+                val sessionStatus by viewModel.sessionStatus.collectAsState()
+                val sending by viewModel.sending.collectAsState()
                 AppRoot(
                     state = state,
                     onLogIn = { launchAuthKit() },
@@ -67,6 +69,8 @@ class MainActivity : ComponentActivity() {
                     onOpenChat = { viewModel.openChat(it) },
                     selectedChat = selected,
                     transcript = transcript,
+                    sessionStatus = sessionStatus,
+                    sending = sending,
                     onBack = { viewModel.closeChat() },
                     onSend = { viewModel.sendPrompt(it) },
                 )

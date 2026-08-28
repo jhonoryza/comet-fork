@@ -1,7 +1,6 @@
 package sh.zeron.android.ui
 
 import androidx.lifecycle.ViewModel
-import org.json.JSONObject
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,16 +9,22 @@ import sh.zeron.android.auth.AuthOrg
 import sh.zeron.android.auth.AuthStateMachine
 import sh.zeron.android.config.AppConfig
 import sh.zeron.android.config.EdgeConfig
+import sh.zeron.android.config.WorkOsAuth
 import sh.zeron.android.data.SessionAdapter
 import sh.zeron.android.data.Transcript
 import sh.zeron.android.loro.LoroDoc
 import sh.zeron.android.loro.RealNativeLoroDoc
 import sh.zeron.android.sync.AppState
+import sh.zeron.android.sync.ChatSync
+import sh.zeron.android.sync.HttpTransport
+import sh.zeron.android.sync.OkHttpWebSocket
 import sh.zeron.android.sync.RegistrySync
+import sh.zeron.android.sync.SessionRepository
 
 class AppViewModel(
     private val auth: AuthStateMachine,
     private val registry: RegistrySync,
+    private val http: HttpTransport,
     private val config: AppConfig,
 ) : ViewModel() {
     private val _state = MutableStateFlow<AppState>(AppState.SignedOut)
@@ -35,10 +40,16 @@ class AppViewModel(
     /** Surfaced so a failed room join shows a reason instead of a spinner. */
     val registryError = registry.lastError
 
-    /** Live session doc for the open chat; null while in workspace. */
-    private var openDoc: LoroDoc? = null
     private val _transcript = MutableStateFlow(Transcript(emptyList()))
     val transcript: StateFlow<Transcript> = _transcript
+    private val _sessionStatus = MutableStateFlow("connecting")
+    val sessionStatus: StateFlow<String> = _sessionStatus
+    private val _sending = MutableStateFlow(false)
+    val sending: StateFlow<Boolean> = _sending
+
+    private var openDoc: LoroDoc? = null
+    private var session: SessionRepository? = null
+    private var orgId: String? = null
 
     /** CSRF state for the in-flight AuthKit round trip. */
     private var pendingState: String? = null
@@ -47,37 +58,70 @@ class AppViewModel(
 
     fun openChat(id: String) {
         _selectedChat.value = id
-        closeDoc()
+        closeSession()
+        _sessionStatus.value = "connecting"
         val doc = try { RealNativeLoroDoc() } catch (e: Throwable) {
-            _state.value = AppState.Fatal("native doc failed: ${e.message}")
+            _sessionStatus.value = "native doc failed: ${e.message}"
             return
         }
         openDoc = doc
+        val sync = ChatSync(id, OkHttpWebSocket(), http, doc)
+        val repo = SessionRepository(id, doc, SessionAdapter(doc), sync, viewModelScope)
+        session = repo
+
         viewModelScope.launch {
-            _transcript.value = SessionAdapter(doc).transcript()
+            val token = auth.accessToken()
+            if (token == null) {
+                _sessionStatus.value = "not signed in"
+                return@launch
+            }
+            repo.start(
+                cursor = 0,
+                deviceId = config.deviceId,
+                url = EdgeConfig.chat2WSUrl(id, token, config.deviceId),
+            )
+            launch { repo.transcript.collect { _transcript.value = it } }
+            launch {
+                repo.connected.collect { on -> if (on) _sessionStatus.value = "connected" }
+            }
+            launch {
+                repo.lastError.collect { e -> if (e != null) _sessionStatus.value = e }
+            }
+            launch {
+                repo.checkpointPending.collect { pending ->
+                    if (pending) _sessionStatus.value = "history compacted — older messages need checkpoint fetch (not implemented)"
+                }
+            }
+            repo.refresh()
         }
     }
 
-    private fun closeDoc() {
-        openDoc?.close()
+    private fun closeSession() {
+        val repo = session
+        session = null
+        val doc = openDoc
         openDoc = null
+        if (repo != null) viewModelScope.launch { repo.shutdown() } else doc?.close()
     }
 
     fun closeChat() {
         _selectedChat.value = null
-        closeDoc()
+        closeSession()
         _transcript.value = Transcript(emptyList())
+        _sessionStatus.value = "connecting"
     }
 
     fun sendPrompt(text: String) {
         if (text.isBlank()) return
-        val doc = openDoc ?: return
+        val repo = session ?: return
         viewModelScope.launch {
+            _sending.value = true
             try {
-                SessionAdapter(doc).queueCommand("run", """{"text":${JSONObject.quote(text)}}""")
-                _transcript.value = SessionAdapter(doc).transcript()
+                repo.sendPrompt(text.trim())
             } catch (e: Throwable) {
-                _state.value = AppState.Fatal("send failed: ${e.message}")
+                _sessionStatus.value = "send failed: ${e.message}"
+            } finally {
+                _sending.value = false
             }
         }
     }
@@ -90,7 +134,7 @@ class AppViewModel(
         val state = java.util.UUID.randomUUID().toString()
         pendingState = state
         _state.value = AppState.SigningIn
-        return sh.zeron.android.config.WorkOsAuth.authorizeUrl(state)
+        return WorkOsAuth.authorizeUrl(state)
     }
 
     /** Browser tab dismissed without a callback. */
@@ -103,8 +147,7 @@ class AppViewModel(
 
     /** Deep-link callback: exchange the code once, state must match. */
     fun onAuthCallback(uri: android.net.Uri) {
-        val expected = pendingState
-        if (expected == null) return
+        val expected = pendingState ?: return
         val callback = sh.zeron.android.auth.DeepLinkHandler.parse(uri, expected)
         pendingState = null
         if (callback == null) {
@@ -131,6 +174,7 @@ class AppViewModel(
                 auth.selectOrgAndRefresh(org.organizationId)
                 val token = auth.accessToken()
                     ?: throw IllegalStateException("no access token after refresh")
+                orgId = org.organizationId
                 registry.start(
                     cursor = null,
                     deviceId = config.deviceId,
@@ -147,7 +191,7 @@ class AppViewModel(
         viewModelScope.launch {
             registry.stop()
             auth.signOut()
-            closeDoc()
+            closeSession()
             _state.value = AppState.SignedOut
         }
     }

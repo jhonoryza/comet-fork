@@ -159,6 +159,26 @@ pub extern "C" fn zla_append_command(handle: *mut std::ffi::c_void, cmd_json: *c
     if ok { 0 } else { 1 }
 }
 
+/// Export the doc's own updates as a hex string (Kotlin marshals bytes as hex).
+/// Returns null on failure; the caller frees with `zla_free_string`.
+#[unsafe(no_mangle)]
+pub extern "C" fn zla_export_hex(handle: *mut std::ffi::c_void) -> *mut std::ffi::c_char {
+    if handle.is_null() { return std::ptr::null_mut() }
+    let arc: Arc<ZeronLoroDoc> = {
+        let ptr = handle as *const ZeronLoroDoc;
+        unsafe { Arc::increment_strong_count(ptr); Arc::from_raw(ptr) }
+    };
+    let bytes = match doc_export_snapshot(arc) {
+        Ok(b) => b,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    std::ffi::CString::new(hex).unwrap_or_default().into_raw()
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn zla_free(handle: *mut std::ffi::c_void) {
     if handle.is_null() { return }
@@ -175,7 +195,7 @@ pub mod jni {
     use jni::sys::{jint, jlong, jstring};
     use jni::JNIEnv;
 
-    use super::{zla_append_command, zla_create, zla_free, zla_import, zla_read};
+    use super::{zla_append_command, zla_create, zla_export_hex, zla_free, zla_import, zla_read};
 
     fn zla_import_hex(handle: jlong, hex: &str) -> jint {
         let mut out = Vec::with_capacity(hex.len() / 2);
@@ -202,6 +222,17 @@ pub mod jni {
         mut env: JNIEnv, _cls: JClass, handle: jlong) -> jstring {
         let ptr = zla_read(handle as *mut std::ffi::c_void);
         if ptr.is_null() { return env.new_string("{}").unwrap().into_raw(); }
+        let s = unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() };
+        unsafe { std::ffi::CString::from_raw(ptr) };
+        env.new_string(&s).unwrap().into_raw()
+    }
+
+    /// Bytes are passed as a hexadecimal string to avoid byte-array marshaling.
+    #[unsafe(no_mangle)]
+    pub extern "system" fn Java_sh_zeron_android_loro_NativeDocBridge_exportHex(
+        mut env: JNIEnv, _cls: JClass, handle: jlong) -> jstring {
+        let ptr = zla_export_hex(handle as *mut std::ffi::c_void);
+        if ptr.is_null() { return env.new_string("").unwrap().into_raw(); }
         let s = unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() };
         unsafe { std::ffi::CString::from_raw(ptr) };
         env.new_string(&s).unwrap().into_raw()

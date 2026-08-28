@@ -1,3 +1,7 @@
 <resources>
-    <style name="Theme.Zeron" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Zeron" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#060606</item>
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:navigationBarColor">#060606</item>
+    </style>
 </resources>

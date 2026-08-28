@@ -22,8 +22,11 @@ class RealNativeLoroDoc : LoroDoc {
     }
 
     override suspend fun exportSnapshot(): ByteArray = withContext(Dispatchers.IO) {
-        // No native snapshot export via JNI yet; document limitation.
-        ByteArray(0)
+        val hex = NativeDocBridge.exportHex(handle)
+        if (hex.isEmpty()) ByteArray(0)
+        else ByteArray(hex.length / 2) { i ->
+            ((Character.digit(hex[i * 2], 16) shl 4) or Character.digit(hex[i * 2 + 1], 16)).toByte()
+        }
     }
 
     override suspend fun getDeepValueJson(): String = withContext(Dispatchers.IO) {
