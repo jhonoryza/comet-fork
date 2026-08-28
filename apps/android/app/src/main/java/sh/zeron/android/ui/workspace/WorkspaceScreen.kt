@@ -190,13 +190,14 @@ private fun SectionLabel(text: String) {
 @Composable
 private fun SessionRow(chat: ChatRow, onOpen: (String) -> Unit) {
     val label = chat.title?.takeIf { it.isNotBlank() } ?: chat.id
+    val description = stringResource(R.string.workspace_open_session, label)
     Row(
         Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(ZeronColors.surface)
             .clickable { onOpen(chat.id) }
-            .semantics { contentDescription = stringResource(R.string.workspace_open_session, label) }
+            .semantics { contentDescription = description }
             .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.md),
