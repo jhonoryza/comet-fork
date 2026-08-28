@@ -24,8 +24,8 @@ fun WorkspaceScreen(
     if (chats.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(24.dp)) {
             Text(
-                if (connected) "No chats yet — start one from a connected device\n(registry room joined)."
-                else "Connecting to edge…\n\nJika tetap kosong, pastikan edge berjalan dan \nDemoConfig.edgeBaseUrl benar (mis. http://10.0.2.2:8787).",
+                if (connected) "No sessions yet.\n\nStart one from a desktop device — it appears here."
+                else "Connecting to the edge…\n\nIf this stays empty, check network access and that this account has a device online.",
                 Modifier.align(Alignment.Center)
             )
         }

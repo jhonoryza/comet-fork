@@ -9,14 +9,13 @@ import kotlinx.coroutines.launch
 import sh.zeron.android.auth.AuthOrg
 import sh.zeron.android.auth.AuthStateMachine
 import sh.zeron.android.config.AppConfig
-import sh.zeron.android.config.DemoConfig
+import sh.zeron.android.config.EdgeConfig
 import sh.zeron.android.data.SessionAdapter
 import sh.zeron.android.data.Transcript
 import sh.zeron.android.loro.LoroDoc
 import sh.zeron.android.loro.RealNativeLoroDoc
 import sh.zeron.android.sync.AppState
 import sh.zeron.android.sync.RegistrySync
-import sh.zeron.android.sync.SessionRepository
 
 class AppViewModel(
     private val auth: AuthStateMachine,
@@ -70,7 +69,6 @@ class AppViewModel(
         viewModelScope.launch {
             try {
                 SessionAdapter(doc).queueCommand("run", """{"text":${JSONObject.quote(text)}}""")
-                // cursor amnesty + push wired in the sync task; durable in local doc now.
                 _transcript.value = SessionAdapter(doc).transcript()
             } catch (e: Throwable) {
                 _state.value = AppState.Fatal("send failed: ${e.message}")
@@ -78,17 +76,19 @@ class AppViewModel(
         }
     }
 
-    fun signIn() {
+    /**
+     * WorkOS sign-in: the user opens the edge sign-in page on any device and
+     * pastes the code (same flow as iOS — apps/ios/Zeron/App/AppModel.swift).
+     */
+    fun signInWithCode(code: String) {
         viewModelScope.launch {
             _state.value = AppState.SigningIn
             try {
-                if (config.isDev) {
-                    val user = DemoConfig.devUserId
-                    val org = DemoConfig.devOrgId
-                    auth.signInDev(user, org)
-                    _state.value = AppState.SelectingOrg(listOf(AuthOrg(org, org, org)))
+                val orgs = auth.signInWithCode(code.trim())
+                if (orgs.isEmpty()) {
+                    _state.value = AppState.Fatal("No organizations on this account")
                 } else {
-                    _state.value = AppState.Fatal("WorkOS flow not wired for dev APK")
+                    _state.value = AppState.SelectingOrg(orgs)
                 }
             } catch (e: Throwable) {
                 _state.value = AppState.Fatal(e.message ?: "sign-in failed")
@@ -100,14 +100,13 @@ class AppViewModel(
         viewModelScope.launch {
             _state.value = AppState.Connecting
             try {
-                if (!config.isDev) {
-                    auth.selectOrgAndRefresh(org.organizationId)
-                }
-                // Dev mode: bearer is already org-scoped; join the registry room.
+                auth.selectOrgAndRefresh(org.organizationId)
+                val token = auth.accessToken()
+                    ?: throw IllegalStateException("no access token after refresh")
                 registry.start(
                     cursor = null,
                     deviceId = config.deviceId,
-                    url = DemoConfig.registryWSUrl(org.organizationId),
+                    url = EdgeConfig.registryWSUrl(org.organizationId, token, config.deviceId),
                 )
                 _state.value = AppState.Ready
             } catch (e: Throwable) {
@@ -120,6 +119,7 @@ class AppViewModel(
         viewModelScope.launch {
             registry.stop()
             auth.signOut()
+            closeDoc()
             _state.value = AppState.SignedOut
         }
     }

@@ -11,7 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import sh.zeron.android.auth.AuthStateMachine
 import sh.zeron.android.auth.HttpAuthClient
-import sh.zeron.android.config.DemoConfig
+import sh.zeron.android.config.EdgeConfig
 import sh.zeron.android.data.PersistentDeviceIdStore
 import sh.zeron.android.data.SecureTokenStore
 import sh.zeron.android.sync.OkHttpTransport
@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                 val http = OkHttpTransport()
                 val deviceIdStore = PersistentDeviceIdStore(context.getSharedPreferences("zeron", MODE_PRIVATE))
                 val deviceId = runBlocking { deviceIdStore.getOrCreate() }
-                val config = DemoConfig.appConfig(deviceId)
+                val config = EdgeConfig.appConfig(deviceId)
                 val auth = AuthStateMachine(HttpAuthClient(config, http), tokens)
                 val registry = RegistrySync(OkHttpWebSocket(), http)
                 return AppViewModel(auth, registry, config) as T
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
                 val registryConnected by viewModel.registryConnected.collectAsState()
                 AppRoot(
                     state = state,
-                    onSignIn = { viewModel.signIn() },
+                    onSignInWithCode = { viewModel.signInWithCode(it) },
                     onOrgSelect = { viewModel.selectOrg(it) },
                     chats = chats,
                     registryConnected = registryConnected,

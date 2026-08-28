@@ -38,10 +38,10 @@ Format check (if ktlint added): `./gradlew ktlintCheck` — documented but not r
 
 ## Dev edge
 
-- Production config points to `https://edge.zeron.sh` (or env-provided base URL).
-- Dev mode: `AUTH_MODE=dev` edge, bearer `user@org`, debug/test BuildConfig only. Never in release.
+- Production edge: `https://edge.zeron.sh` (`EdgeConfig.PRODUCTION_EDGE`, same default as iOS `AppModel.edgeURLString`).
+- Sign-in: WorkOS paste-code — open `https://edge.zeron.sh/auth/signin` on any device and paste the code into the app (`/auth/exchange`, then `/auth/refresh` re-scopes to the picked org).
+- Dev mode (`AUTH_MODE=dev` edge, bearer `user@org`) exists in `AuthStateMachine.signInDev` for debug/test only; it is not the default and never ships in release.
 
 ## Architecture guardrails
 
 See `docs/android-protocol-contract.md` + `docs/android-loro-api.md`. Kotlin never does CRDT; all Loro via `ZeronLoroDoc`.
-# trigger Thu Aug 27 07:09:09 AM UTC 2026
