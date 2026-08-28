@@ -9,17 +9,19 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Zeron">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- WorkOS Custom Tab deep-link callback (validated with state/nonce) -->
+            <!-- WorkOS AuthKit callback (zeron://callback, same as iOS);
+                 the code is only accepted when `state` matches. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="sh.zeron.auth" android:host="callback" />
+                <data android:scheme="zeron" android:host="callback" />
             </intent-filter>
         </activity>
     </application>

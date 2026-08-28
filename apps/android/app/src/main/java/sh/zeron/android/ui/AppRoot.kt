@@ -23,7 +23,7 @@ import sh.zeron.android.ui.workspace.WorkspaceScreen
 @Composable
 fun AppRoot(
     state: AppState,
-    onSignInWithCode: (String) -> Unit,
+    onLogIn: () -> Unit,
     onOrgSelect: (AuthOrg) -> Unit,
     chats: List<ChatRow> = emptyList(),
     registryConnected: Boolean = true,
@@ -45,8 +45,8 @@ fun AppRoot(
         return
     }
     when (state) {
-        is AppState.SignedOut -> SignInScreen(onSignInWithCode)
-        is AppState.SigningIn -> SignInScreen(onSignInWithCode, isLoading = true)
+        is AppState.SignedOut -> SignInScreen(onLogIn)
+        is AppState.SigningIn -> SignInScreen(onLogIn, isLoading = true)
         is AppState.SelectingOrg -> OrgPickerScreen(state.orgs, onOrgSelect)
         is AppState.Ready -> WorkspaceScreen(chats, registryConnected, onOpenChat, onArchiveChat)
         is AppState.Fatal -> FatalScreen(state.message)

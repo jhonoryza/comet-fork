@@ -1,17 +1,22 @@
 package sh.zeron.android
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.runBlocking
 import sh.zeron.android.auth.AuthStateMachine
 import sh.zeron.android.auth.HttpAuthClient
 import sh.zeron.android.config.EdgeConfig
+import sh.zeron.android.config.WorkOsAuth
 import sh.zeron.android.data.PersistentDeviceIdStore
 import sh.zeron.android.data.SecureTokenStore
 import sh.zeron.android.sync.OkHttpTransport
@@ -19,7 +24,6 @@ import sh.zeron.android.sync.OkHttpWebSocket
 import sh.zeron.android.sync.RegistrySync
 import sh.zeron.android.ui.AppRoot
 import sh.zeron.android.ui.AppViewModel
-import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels {
@@ -39,6 +43,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** True while the AuthKit tab is in front, so onResume can detect a dismiss. */
+    private var awaitingCallback = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NativeLoader.loadOnce()
@@ -51,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 val registryConnected by viewModel.registryConnected.collectAsState()
                 AppRoot(
                     state = state,
-                    onSignInWithCode = { viewModel.signInWithCode(it) },
+                    onLogIn = { launchAuthKit() },
                     onOrgSelect = { viewModel.selectOrg(it) },
                     chats = chats,
                     registryConnected = registryConnected,
@@ -63,10 +70,36 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        handleAuthIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAuthIntent(intent)
+    }
+
+    private fun handleAuthIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != WorkOsAuth.CALLBACK_SCHEME || uri.host != WorkOsAuth.CALLBACK_HOST) return
+        awaitingCallback = false
+        viewModel.onAuthCallback(uri)
+    }
+
+    /** Open WorkOS AuthKit in a Custom Tab; return arrives via zeron://callback. */
+    private fun launchAuthKit() {
+        val url = viewModel.beginSignIn()
+        awaitingCallback = true
+        CustomTabsIntent.Builder().build().launchUrl(this, Uri.parse(url))
     }
 
     override fun onResume() {
         super.onResume()
+        if (awaitingCallback) {
+            // Back on our activity with no callback intent = user dismissed the tab.
+            awaitingCallback = false
+            viewModel.signInAborted()
+        }
         viewModel.onForeground()
     }
 }

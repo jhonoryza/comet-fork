@@ -1,8 +1,8 @@
 package sh.zeron.android.config
 
 /**
- * Edge connection defaults. Mirrors iOS `AppModel.edgeURLString`
- * (apps/ios/Zeron/App/AppModel.swift:32) — production edge + WorkOS mode.
+ * Edge connection defaults. Mirrors iOS `Endpoints.edgeURL`
+ * (apps/ios/Zeron/Views/SignInView.swift:13) — production edge, WorkOS AuthKit.
  * Dev mode (`user@org` bearer against an AUTH_MODE=dev edge) stays available
  * for debug builds but is never the default.
  */

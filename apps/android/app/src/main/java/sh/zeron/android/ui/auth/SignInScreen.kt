@@ -6,40 +6,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import sh.zeron.android.config.EdgeConfig
 
 /**
- * WorkOS paste-code sign-in — the same flow as iOS: open the edge sign-in page
- * on any device, paste the code it shows, the app exchanges it for tokens.
+ * WorkOS AuthKit sign-in — one button that opens the hosted login in a browser
+ * tab and returns through `zeron://callback` (same flow as iOS SignInView).
  */
 @Composable
-fun SignInScreen(onSignInWithCode: (String) -> Unit, isLoading: Boolean = false) {
-    var code by remember { mutableStateOf("") }
+fun SignInScreen(onLogIn: () -> Unit, isLoading: Boolean = false) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Zeron")
-        Text("Edge: ${EdgeConfig.edgeBaseUrl}")
-        Text("Open ${EdgeConfig.edgeBaseUrl}/auth/signin on any device, then paste the code below.")
-        TextField(
-            value = code,
-            onValueChange = { code = it },
-            enabled = !isLoading,
-            label = { Text("Sign-in code") },
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Sign-in code" },
+        Text("Zeron", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "Your coding agents, from anywhere",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 6.dp, bottom = 32.dp),
         )
         Button(
-            onClick = { onSignInWithCode(code) },
-            enabled = !isLoading && code.isNotBlank(),
-            modifier = Modifier.semantics { contentDescription = "Sign in" },
-        ) { Text(if (isLoading) "Signing in…" else "Sign in") }
+            onClick = onLogIn,
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Log in to Zeron" },
+        ) {
+            if (isLoading) CircularProgressIndicator(Modifier.padding(2.dp))
+            else Text("Log in to Zeron")
+        }
     }
 }

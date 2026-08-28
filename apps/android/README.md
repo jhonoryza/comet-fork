@@ -57,8 +57,14 @@ installable for manual testing. Before any public release, add a real
 
 ## Edge
 
-- Production edge: `https://edge.zeron.sh` (`EdgeConfig.PRODUCTION_EDGE`, same default as iOS `AppModel.edgeURLString`).
-- Sign-in: WorkOS paste-code — open `https://edge.zeron.sh/auth/signin` on any device and paste the code into the app (`/auth/exchange`, then `/auth/refresh` re-scopes to the picked org).
+- Production edge: `https://edge.zeron.sh` (`EdgeConfig.PRODUCTION_EDGE`, same default as iOS `Endpoints.edgeURL`).
+- Sign-in: one **Log in to Zeron** button opens WorkOS AuthKit
+  (`https://api.workos.com/user_management/authorize`) in a Custom Tab and returns
+  through `zeron://callback` — the same authorization-code flow as iOS
+  `SignInView`. The app validates `state`, then `POST /auth/exchange`,
+  `GET /auth/orgs`, and `POST /auth/refresh` to scope the picked org.
+- `GET /auth/signin` is not a browsable page; the edge only exposes
+  `/auth/exchange`, `/auth/refresh`, `/auth/orgs`, `/auth/cli/callback`.
 - Dev mode (`AUTH_MODE=dev` edge, bearer `user@org`) exists in `AuthStateMachine.signInDev` for debug/test only; it is not the default and never ships in release.
 
 ## Architecture guardrails
