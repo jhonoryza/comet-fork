@@ -13,6 +13,24 @@ sealed class Part {
     data class Error(val id: String, val message: String) : Part()
 }
 
+/**
+ * Entry lifecycle (schema.rs `MessageStatus`). `Streaming` is the host saying
+ * "this turn is still being written" — the only honest signal the viewer has
+ * that the model has not finished.
+ */
+enum class MessageStatus {
+    Streaming, Complete, Aborted;
+
+    companion object {
+        fun parse(raw: String?): MessageStatus? = when (raw?.lowercase()) {
+            "streaming" -> Streaming
+            "complete" -> Complete
+            "aborted" -> Aborted
+            else -> null
+        }
+    }
+}
+
 /** Message author (schema.rs `MessageRole`). */
 enum class MessageRole {
     User, Assistant, System;
@@ -35,9 +53,20 @@ data class TranscriptMessage(
     val id: String,
     val role: MessageRole,
     val parts: List<Part>,
+    val status: MessageStatus? = null,
 )
 
-data class Transcript(val messages: List<TranscriptMessage>) {
+/**
+ * @param working the turn is still being written. Only the LAST doc entry
+ *   counts — an older `streaming` entry belongs to a run that died, and the
+ *   host stamps those `aborted` on recovery, so treating them as live would
+ *   spin forever. It is carried rather than derived from [messages] because a
+ *   just-opened entry has no parts yet and never reaches the list.
+ */
+data class Transcript(
+    val messages: List<TranscriptMessage>,
+    val working: Boolean = false,
+) {
     /** Flattened view, for counts and assertions that don't care about grouping. */
     val parts: List<Part> get() = messages.flatMap { it.parts }
 
@@ -55,6 +84,7 @@ class SessionAdapter(private val doc: LoroDoc) {
         val json = doc.getDeepValueJson()
         if (json.isBlank() || json == "{}" || json == "null") return Transcript(emptyList())
         val out = mutableListOf<TranscriptMessage>()
+        var lastStatus: MessageStatus? = null
         try {
             val root = JSONObject(json)
             val messages = root.optJSONArray("messages") ?: JSONArray()
@@ -86,13 +116,15 @@ class SessionAdapter(private val doc: LoroDoc) {
                         else -> text?.let { parts += Part.Text(partId, it) }
                     }
                 }
-                if (parts.isNotEmpty()) out += TranscriptMessage(msgId, role, parts)
+                val status = MessageStatus.parse(msg.optString("status").takeIf { it.isNotEmpty() })
+                lastStatus = status
+                if (parts.isNotEmpty()) out += TranscriptMessage(msgId, role, parts, status)
             }
         } catch (e: Exception) {
             // Malformed doc: surface what we can, never crash the viewer.
             if (out.isEmpty()) return Transcript(emptyList())
         }
-        return Transcript(out)
+        return Transcript(out, working = lastStatus == MessageStatus.Streaming)
     }
 
     /// Durable command-ledger append (viewer-only write allowed by writer discipline).

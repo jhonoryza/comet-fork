@@ -38,8 +38,9 @@
     <string name="session_thinking">Thinking</string>
     <string name="session_details_show">Show details</string>
     <string name="session_details_hide">Hide details</string>
-    <string name="session_tool">Tool</string>
-    <string name="session_tool_failed">Tool failed</string>
+    <string name="session_working">Working…</string>
+    <string name="session_scroll_top">Scroll to top</string>
+    <string name="session_scroll_bottom">Scroll to bottom</string>
 
     <!-- Session status -->
     <string name="status_connecting">Connecting…</string>
