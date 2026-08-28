@@ -286,10 +286,12 @@ class AppViewModel(
         // harness this catalog can't model (grok/hermes/pi) locks the whole
         // picker — no sensible static model list exists for it. Only a
         // config-less chat stays fully editable; its first run stamps the pair.
-        val config = chats.value.firstOrNull { it.id == id }?.config
-        if (config != null) {
-            val known = HarnessCatalog.knows(config.harness)
-            _modelSelection.value = HarnessCatalog.Selection(config.harness, config.model, config.reasoning)
+        // NOTE: named `chatConfig` — it must NOT shadow the AppConfig ctor
+        // param `config` used below for deviceId.
+        val chatConfig = chats.value.firstOrNull { it.id == id }?.config
+        if (chatConfig != null) {
+            val known = HarnessCatalog.knows(chatConfig.harness ?: "")
+            _modelSelection.value = HarnessCatalog.Selection(chatConfig.harness ?: "", chatConfig.model, chatConfig.reasoning)
             _pickerLocked.value = !known
             _harnessLocked.value = known
         } else {
@@ -534,7 +536,10 @@ class AppViewModel(
         val parts = raw.split(".", "-").mapNotNull { it.toIntOrNull() }
         if (parts.size < 3) return false
         val v = Triple(parts[0], parts[1], parts[2])
-        return v >= min
+        // Triple isn't Comparable — compare component-wise (iOS numeric compare).
+        return v.first > min.first ||
+            (v.first == min.first && v.second > min.second) ||
+            (v.first == min.first && v.second == min.second && v.third >= min.third)
     }
 
     fun closeNewSession() {

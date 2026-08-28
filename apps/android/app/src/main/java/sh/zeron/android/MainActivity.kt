@@ -151,8 +151,8 @@ class MainActivity : ComponentActivity() {
                     onCloseNewSpace = { viewModel.closeNewSpace() },
                     onPickFolderDevice = { deviceId -> viewModel.pickFolderDevice(deviceId) },
                     onNavigateFolder = { path, isRepo ->
-                        val deviceId = viewModel.folderDeviceId.value ?: return@onNavigateFolder
-                        viewModel.loadFolders(deviceId, path, isRepo)
+                        val deviceId = viewModel.folderDeviceId.value
+                        if (deviceId != null) viewModel.loadFolders(deviceId, path, isRepo)
                     },
                     onCreateSpace = { deviceId, path, isRepo, done ->
                         viewModel.createSpace(deviceId, path, isRepo, done)

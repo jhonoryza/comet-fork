@@ -168,7 +168,7 @@ fun NewSpaceScreen(
                 horizontalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
             ) {
                 IconButton(
-                    onClick = { onNavigate(listing?.parent, isRepo = false) },
+                    onClick = { onNavigate(listing?.parent, false) },
                     enabled = listing?.parent != null,
                 ) {
                     Icon(

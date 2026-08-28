@@ -114,7 +114,7 @@ private fun DeliveryStrip(
 ) {
     val progress = transferProgress
     val failed = sendState == SendState.Failed
-    val label: String? = when {
+    val label = when {
         progress != null -> {
             val pct = (progress * 100).toInt().coerceIn(0, 99)
             stringResource(R.string.status_uploading, pct)
@@ -122,8 +122,8 @@ private fun DeliveryStrip(
         sendState == SendState.Sending -> stringResource(R.string.status_sending)
         sendState == SendState.Queued -> stringResource(R.string.status_queued)
         sendState == SendState.Failed -> stringResource(R.string.status_not_delivered)
-        else -> null
-    } ?: return
+        else -> return // no strip to show — the row hides itself
+    }
     val tone = when {
         progress != null -> ZeronColors.textMuted
         failed -> ZeronColors.danger

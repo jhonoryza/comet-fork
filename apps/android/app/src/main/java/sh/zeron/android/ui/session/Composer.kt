@@ -65,6 +65,7 @@ import sh.zeron.android.data.StagedAttachment
 import sh.zeron.android.data.stageAttachment
 import sh.zeron.android.ui.theme.ZeronColors
 import sh.zeron.android.ui.theme.ZeronSpacing
+import kotlinx.coroutines.launch
 
 enum class ComposerMode { Draft, Sending, Steering, Disabled }
 
@@ -102,6 +103,8 @@ fun Composer(
     var attachError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Hoisted: stringResource is @Composable and the staging runs off-main.
+    val attachFailedText = stringResource(R.string.attach_failed)
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
@@ -116,7 +119,7 @@ fun Composer(
                 attachments = attachments + staged
                 attachError = null
             } else {
-                attachError = stringResource(R.string.attach_failed)
+                attachError = attachFailedText
             }
         }
     }
@@ -177,13 +180,14 @@ fun Composer(
                     onClick = { showTraitPicker = true },
                 )
             }
-        }            if (attachments.isNotEmpty()) {
-                AttachmentStrip(
-                    attachments = attachments,
-                    onRemove = { id -> attachments = attachments.filter { it.id != id } },
-                )
-            }
-            if (attachError != null) {
+        }
+        if (attachments.isNotEmpty()) {
+            AttachmentStrip(
+                attachments = attachments,
+                onRemove = { id -> attachments = attachments.filter { it.id != id } },
+            )
+        }
+        if (attachError != null) {
                 Text(
                     attachError.orEmpty(),
                     style = MaterialTheme.typography.labelSmall,
