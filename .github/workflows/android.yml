@@ -1,6 +1,8 @@
 name: android
 
 on:
+  pull_request:
+    paths: ["apps/android/**", "crates/zeron-loro-android/**", ".github/workflows/android.yml"]
   push:
     branches: [main]
     paths: ["apps/android/**", "crates/zeron-loro-android/**", ".github/workflows/android.yml"]
