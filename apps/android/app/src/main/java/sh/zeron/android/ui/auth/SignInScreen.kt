@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,7 +36,10 @@ import sh.zeron.android.ui.theme.ZeronSpacing
 fun SignInScreen(onLogIn: () -> Unit, isLoading: Boolean = false) {
     Box(Modifier.fillMaxSize().background(ZeronColors.bg)) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = ZeronSpacing.xxl, vertical = ZeronSpacing.xxl),
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = ZeronSpacing.xxl, vertical = ZeronSpacing.xxl),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

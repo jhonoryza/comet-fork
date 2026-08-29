@@ -43,6 +43,10 @@
     <string name="session_scroll_bottom">Scroll to bottom</string>
     <string name="session_question">Question</string>
 
+    <!-- Copy -->
+    <string name="copy_message">Copy message</string>
+    <string name="copy_copied">Copied</string>
+
     <!-- Session status -->
     <string name="status_connecting">Connecting…</string>
     <string name="status_connected">Connected</string>
@@ -69,6 +73,8 @@
     <!-- Model picker -->
     <string name="model_picker_label">Model</string>
     <string name="model_picker_title">Choose model</string>
+    <string name="model_picker_search">Search model…</string>
+    <string name="model_picker_no_results">No model matches “%1$s”.</string>
     <string name="trait_picker_title">Effort</string>
 
     <!-- New session -->
