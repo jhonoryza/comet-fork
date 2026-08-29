@@ -1,5 +1,6 @@
 package sh.zeron.android.ui.transcript
 
+import android.content.ClipData
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
@@ -37,6 +38,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,17 +62,15 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.selection.selectionContainer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.ClipData
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import sh.zeron.android.R
@@ -512,16 +512,17 @@ private fun PartView(part: Part, streaming: Boolean) {
  */
 @Composable
 private fun SelectableText(
-    text: String,
+    text: AnnotatedString,
     color: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyLarge,
-        color = color,
-        modifier = modifier.selectionContainer(),
-    )
+    SelectionContainer(modifier = modifier) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+        )
+    }
 }
 
 /**
@@ -616,7 +617,7 @@ fun CodeBlock(code: String, lang: String?) {
         }
         // Code must not reflow: wrapping a shell line changes what it says.
         // SelectionContainer so a long-press grabs the command, brackets and all.
-        androidx.compose.foundation.text.selection.SelectionContainer {
+        SelectionContainer {
             Text(
                 code,
                 style = MonoStyle,
