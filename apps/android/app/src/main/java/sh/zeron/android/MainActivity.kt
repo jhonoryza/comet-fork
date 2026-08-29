@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.runtime.collectAsState
@@ -70,6 +71,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge, as the theme file documents (it drift from this comment
+        // once: the call went missing and every screen under-drew — status bar
+        // black band, and the IME PANNED the window on top of the composer's
+        // own imePadding, bouncing the whole screen while typing).
+        enableEdgeToEdge()
         NativeLoader.loadOnce()
         val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         runCatching { connectivityManager.registerDefaultNetworkCallback(networkCallback) }

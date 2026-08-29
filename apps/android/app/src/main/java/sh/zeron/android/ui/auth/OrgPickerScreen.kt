@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +29,10 @@ import sh.zeron.android.ui.theme.ZeronSpacing
 fun OrgPickerScreen(orgs: List<AuthOrg>, onSelect: (AuthOrg) -> Unit) {
     Box(Modifier.fillMaxSize().background(ZeronColors.bg)) {
         Column(
-            Modifier.fillMaxSize().padding(ZeronSpacing.xl),
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(ZeronSpacing.xl),
             verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm),
         ) {
             Text(

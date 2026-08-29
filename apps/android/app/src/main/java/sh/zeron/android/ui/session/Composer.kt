@@ -530,6 +530,11 @@ private fun ModelPickerSheet(
         onDismissRequest = onDismiss,
         containerColor = ZeronColors.surface,
     ) {
+        // A filter over harness/model labels+ids (case-insensitive). The live
+        // catalogs can be a dozen providers × dozens of models long; without
+        // this the only way to find a model is to scroll (desktop ModelPicker
+        // has the same field). Empties on open — the whole list is the default.
+        var query by remember { mutableStateOf("") }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -542,6 +547,24 @@ private fun ModelPickerSheet(
                 color = ZeronColors.text,
                 modifier = Modifier.padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.sm),
             )
+            TextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = {
+                    Text(stringResource(R.string.model_picker_search), color = ZeronColors.textFaint)
+                },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = ZeronColors.text),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = ZeronColors.surfaceRaised,
+                    unfocusedContainerColor = ZeronColors.surfaceRaised,
+                    focusedIndicatorColor = ZeronColors.accent,
+                    unfocusedIndicatorColor = ZeronColors.divider,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.xs),
+            )
             // iOS ModelPickerSheet.sections: a locked provider offers just the
             // session's harness (single section, no header); otherwise the
             // device's live harness list (static pair as fallback).
@@ -550,7 +573,19 @@ private fun ModelPickerSheet(
             } else {
                 harnesses ?: HarnessCatalog.harnesses
             }
+            val needle = query.trim()
+            var anyMatch = false
             sections.forEach { harness ->
+                val harnessMatches = needle.isEmpty() ||
+                    harness.label.contains(needle, ignoreCase = true) ||
+                    harness.id.contains(needle, ignoreCase = true)
+                val models = (catalogs[harness.id] ?: HarnessCatalog.models(harness.id)).filter { model ->
+                    needle.isEmpty() || harnessMatches ||
+                        model.label.contains(needle, ignoreCase = true) ||
+                        model.id.contains(needle, ignoreCase = true)
+                }
+                if (models.isEmpty()) return@forEach
+                anyMatch = true
                 if (sections.size > 1) {
                     Text(
                         harness.label,
@@ -563,7 +598,7 @@ private fun ModelPickerSheet(
                         ),
                     )
                 }
-                (catalogs[harness.id] ?: HarnessCatalog.models(harness.id)).forEach { model ->
+                models.forEach { model ->
                     val selected = selection.harness == harness.id && selection.model == model.id
                     Column(
                         Modifier
@@ -591,6 +626,14 @@ private fun ModelPickerSheet(
                         }
                     }
                 }
+            }
+            if (!anyMatch) {
+                Text(
+                    stringResource(R.string.model_picker_no_results, needle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ZeronColors.textFaint,
+                    modifier = Modifier.padding(horizontal = ZeronSpacing.lg, vertical = ZeronSpacing.lg),
+                )
             }
         }
     }

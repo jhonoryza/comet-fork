@@ -52,18 +52,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.selection.selectionContainer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ClipData
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import sh.zeron.android.R
@@ -127,9 +134,37 @@ fun TranscriptView(
         }
     }
 
+    // Streaming tail: follow the END of the last item — its pixel height, not
+    // the part count. The part count steps once per whole text/reasoning part,
+    // while streaming rewrites the tail part's text several times a second with
+    // no count change — so the count-keyed effect stayed idle and the feed
+    // stopped following mid-answer. Watching the item's total size also brings
+    // in each growth INSIDE a tall part (markdown paragraphs, code blocks).
     val partCount = messages.sumOf { it.parts.size }
-    LaunchedEffect(partCount, working) {
-        if (landed && atBottom && messages.isNotEmpty()) listState.scrollToEnd(lastIndex)
+
+    // A finger on the list wins: reading/scanning history must not fight the
+    // auto-follow. Drag events only — a programmatic follow is not an
+    // interaction, so it never pauses itself.
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is androidx.compose.foundation.interaction.DragInteraction.Start -> dragging = true
+                is androidx.compose.foundation.interaction.DragInteraction.Stop,
+                is androidx.compose.foundation.interaction.DragInteraction.Cancel -> dragging = false
+            }
+        }
+    }
+
+    LaunchedEffect(partCount, working, lastMessageId) {
+        if (!landed || !working || messages.isEmpty()) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo
+            .lastOrNull { it.index == lastIndex }?.let { it.offset + it.size } ?: 0 }
+            .collect { tailBottom ->
+                if (tailBottom > 0 && atBottom && !dragging) {
+                    listState.scrollToEnd(lastIndex)
+                }
+            }
     }
 
     Box(modifier) {
@@ -309,6 +344,15 @@ private fun MessageBlock(
                     }
                 }
             }
+            // Copy sits OUTSIDE the bubble (aligned with it): inside it the
+            // long-press that starts text selection pelearía con el drag de
+            // la lista. Copia el texto plano del mensaje entero.
+            CopyButton(
+                plainText = message.parts
+                    .filterIsInstance<Part.Text>()
+                    .map { it.text }
+                    .joinToString("\n\n"),
+            )
         }
         return
     }
@@ -320,6 +364,12 @@ private fun MessageBlock(
         // thought in the same message is already settled and stays collapsed.
         val tail = message.parts.lastOrNull()
         message.parts.forEach { PartView(it, streaming = streaming && it === tail) }
+        CopyButton(
+            plainText = message.parts
+                .filterIsInstance<Part.Text>()
+                .map { it.text }
+                .joinToString("\n\n"),
+        )
     }
 }
 
@@ -455,6 +505,54 @@ private fun PartView(part: Part, streaming: Boolean) {
     }
 }
 
+/**
+ * Body text inside SelectionContainer (iOS isTextSelectionEnabled): the user
+ * long-presses, marks any fragment and copies it from the native toolbar.
+ * The whole-message copy lives in [CopyButton].
+ */
+@Composable
+private fun SelectableText(
+    text: String,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = color,
+        modifier = modifier.selectionContainer(),
+    )
+}
+
+/**
+ * Copy the whole message to the clipboard, then toast. Text parts only —
+ * reasoning folds and tool calls are bookkeeping, not the conversation.
+ * Selection (SelectionContainer below) covers any fragment.
+ */
+@Composable
+private fun CopyButton(plainText: String) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val copiedLabel = stringResource(R.string.copy_copied)
+    IconButton(
+        onClick = {
+            scope.launch {
+                clipboard.setClipEntry(ClipData.newPlainText("text", plainText).toClipEntry())
+            }
+            android.widget.Toast.makeText(context, copiedLabel, android.widget.Toast.LENGTH_SHORT).show()
+        },
+        modifier = Modifier.size(26.dp),
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_copy),
+            contentDescription = stringResource(R.string.copy_message),
+            tint = ZeronColors.textFaint,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
 /** Rendered Markdown — headings, bullets, fenced code and inline spans. */
 @Composable
 fun MarkdownText(source: String, color: androidx.compose.ui.graphics.Color = ZeronColors.text) {
@@ -462,11 +560,7 @@ fun MarkdownText(source: String, color: androidx.compose.ui.graphics.Color = Zer
     Column(verticalArrangement = Arrangement.spacedBy(ZeronSpacing.sm)) {
         blocks.forEach { block ->
             when (block) {
-                is MdBlock.Paragraph -> Text(
-                    block.text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = color,
-                )
+                is MdBlock.Paragraph -> SelectableText(block.text, color)
                 is MdBlock.Heading -> Text(
                     block.text,
                     style = when (block.level) {
@@ -488,9 +582,8 @@ fun MarkdownText(source: String, color: androidx.compose.ui.graphics.Color = Zer
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = ZeronColors.textMuted,
                             )
-                            Text(
+                            SelectableText(
                                 item,
-                                style = MaterialTheme.typography.bodyLarge,
                                 color = color,
                                 modifier = Modifier.padding(start = ZeronSpacing.sm),
                             )
@@ -522,13 +615,16 @@ fun CodeBlock(code: String, lang: String?) {
             )
         }
         // Code must not reflow: wrapping a shell line changes what it says.
-        Text(
-            code,
-            style = MonoStyle,
-            color = ZeronColors.text,
-            softWrap = false,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        )
+        // SelectionContainer so a long-press grabs the command, brackets and all.
+        androidx.compose.foundation.text.selection.SelectionContainer {
+            Text(
+                code,
+                style = MonoStyle,
+                color = ZeronColors.text,
+                softWrap = false,
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            )
+        }
     }
 }
 
