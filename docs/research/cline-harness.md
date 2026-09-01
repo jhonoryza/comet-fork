@@ -144,3 +144,42 @@ Mirrors `grok_spec()` / `hermes_spec()` (`crates/harness/src/acp/mod.rs`):
 No engine, sync, doc-crate, or edge changes are required — the entire integration is
 harness-crate + registration, which is why the estimate stays low.
 
+
+## Live probe results (2026-09-01, cline 3.0.60, verified against the real CLI)
+
+Probes: JSON-RPC over stdio against `cline --acp` (handshake, session/new,
+session/prompt, cross-process session/load). Findings:
+
+1. **Turn-end determinism: CONFIRMED.** `session/prompt` settles with a first-class
+   `stopReason: "end_turn"` (4.1s for a trivial turn). The prompt response is the
+   authoritative turn end; no prompt-complete extension exists (`_meta` is null) and
+   none is needed.
+2. **Config options: provider + model only.** `session/new` advertises exactly two
+   `configOptions` (category "model"): `provider` (cline / cline-pass / openai-codex
+   with currentValue) and `model` (the full catalog, currentValue
+   `anthropic/claude-sonnet-5`). **No** thinking/ladder option and **no** auto-approve
+   option: the reasoning ladder degrades to the agent default exactly as designed, and
+   tool approvals ALWAYS arrive as `session/request_permission` (ACP default) and bridge
+   to zeron's approval UI. `RunRequest::auto_approve` cannot be honored per-session over
+   ACP; launching with `--auto-approve true` would disable approvals for every session —
+   deliberately not done.
+3. **First-class models + modes.** `session/new` carries a full `models.availableModels`
+   catalog (`currentModelId`), and `modes` with plan/act (`currentModeId: "act"`) —
+   zeron's picker receives the real catalog, and the plan/act switch maps onto the
+   session modes rather than the static spec.
+4. **Session resume: CONFIRMED cross-process.** `agentCapabilities.loadSession: true`;
+   `session/load {sessionId, cwd, mcpServers: []}` on a persisted session from an exited
+   CLI process succeeds and replays the prior conversation as `session/update`
+   (`user_message_chunk` / `agent_message_chunk`) before a follow-up prompt settles
+   contextually. Note: `mcpServers` is REQUIRED on `session/load` (omitting it yields
+   -32602), and loading an in-process active session errors with -32002.
+5. **Updates observed**: `agent_message_chunk`, `user_message_chunk`,
+   `session_info_update` — all standard ACP update shapes zeron's normalizer handles.
+   `promptCapabilities.image: true` (attachments map to image content blocks).
+6. **No steering extension** (`_meta` null): turn-boundary steering stands, as spec'd.
+
+Spec deltas from the original table: none required — `prompt_stall` 30s, turn-boundary
+steering, and the degraded ladder are all validated behavior. Open follow-up: cline
+installed via **mise** (`~/.local/share/mise/installs/node/latest/bin`) is reachable
+only through the login-shell PATH probe; consider adding mise's bin dirs to the shared
+version-manager scan (`node_version_manager_bins`).

@@ -53,9 +53,9 @@ Grok/Hermes/Pi. Tasks are ordered; each is independently compilable. Check off a
 - **Done when**: `cargo check -p zeron-ui` passes; picker renders Cline when installed.
 
 ## T7 — docs + verification trail
-- [ ] Record live-probe results (turn settle, config options, `session/load`) in
+- [x] Record live-probe results (turn settle, config options, `session/load`) in
       `cline-harness.md` once a real `cline` CLI is exercised against the fixture/spec.
-- [ ] e2e smoke pass with the real CLI where available.
+- [x] Live end-to-end pass against the real CLI: session/new → session/prompt (stopReason end_turn) → cross-process session/load + follow-up turn. Full `scripts/e2e-smoke.sh` run deferred to pre-PR CI.
 
 ## Out of scope (deliberate)
 - Sandbox ladder mapping (no Cline equivalent — restricted levels fall back to Cline's
